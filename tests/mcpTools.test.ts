@@ -144,7 +144,8 @@ function validMemory(title: string): NewMemoryInput {
     },
     privacy: {
       redacted: true,
-      public_safe: true
+      public_safe: true,
+      redaction_warnings: []
     }
   };
 }

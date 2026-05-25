@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +11,7 @@ const port = 4837;
 const cloudUrl = `http://127.0.0.1:${port}`;
 const cloudDbPath = path.join(tempRoot, "cloud", "cloud.sqlite");
 
-let cloud: ChildProcessWithoutNullStreams | undefined;
+let cloud: ChildProcess | undefined;
 
 async function main(): Promise<void> {
   header("ANT Demo");
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   line("ANT saved a structured local memory, redacted secrets locally, synced only the public-safe memory, and found it through the cloud API.");
 }
 
-function startCloud(): ChildProcessWithoutNullStreams {
+function startCloud(): ChildProcess {
   const child = spawn(process.execPath, [cloudPath], {
     cwd: tempRoot,
     env: {

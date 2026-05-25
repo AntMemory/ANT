@@ -131,12 +131,14 @@ test("invalid memory is rejected", () => {
   assert.match(result.stderr, /cause is required/);
 });
 
-function runCli(args: string[], cwd: string, input?: string): ReturnType<typeof spawnSync> {
+type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
+
+function runCli(args: string[], cwd: string, input?: string): CliResult {
   return spawnSync(process.execPath, [tsxPath, cliPath, ...args], {
     cwd,
     input,
     encoding: "utf8"
-  });
+  }) as CliResult;
 }
 
 function validMemory(title: string): object {

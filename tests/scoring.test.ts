@@ -54,10 +54,10 @@ test("failed_count lowers ranking", () => {
 
 test("package framework and version match improves ranking", () => {
   const matching = memory("matching", {
-    context: { framework: "Next.js", package_name: "next", package_version: "15.x" }
+    context: { ...memory("base").context, framework: "Next.js", package_name: "next", package_version: "15.x" }
   });
   const generic = memory("generic", {
-    context: { framework: "React", package_name: "react", package_version: "18.x" }
+    context: { ...memory("base").context, framework: "React", package_name: "react", package_version: "18.x" }
   });
 
   const results = rankMemories([generic, matching], "params promise", {

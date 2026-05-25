@@ -31,7 +31,8 @@ test("createMemory enforces required solved-issue fields", () => {
         },
         privacy: {
           redacted: true,
-          public_safe: false
+          public_safe: false,
+          redaction_warnings: []
         }
       }),
     /title is required/

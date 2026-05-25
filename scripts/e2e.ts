@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,7 +12,7 @@ const cloudDbPath = path.join(tempRoot, "cloud", "cloud.sqlite");
 const cloudPort = 4737;
 const cloudUrl = `http://127.0.0.1:${cloudPort}`;
 
-let cloud: ChildProcessWithoutNullStreams | undefined;
+let cloud: ChildProcess | undefined;
 
 async function main(): Promise<void> {
   step("build local CLI");
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
   console.log("ANT E2E test passed");
 }
 
-function startCloud(): ChildProcessWithoutNullStreams {
+function startCloud(): ChildProcess {
   const child = spawn(process.execPath, [cloudPath], {
     cwd: tempRoot,
     env: {

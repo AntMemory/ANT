@@ -71,8 +71,10 @@ function tempDb(): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ant-dedupe-")), "memory.sqlite");
 }
 
-function runCli(args: string[], cwd: string): ReturnType<typeof spawnSync> {
-  return spawnSync(process.execPath, [tsxPath, cliPath, ...args], { cwd, encoding: "utf8" });
+type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
+
+function runCli(args: string[], cwd: string): CliResult {
+  return spawnSync(process.execPath, [tsxPath, cliPath, ...args], { cwd, encoding: "utf8" }) as CliResult;
 }
 
 function memory(

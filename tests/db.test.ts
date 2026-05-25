@@ -49,7 +49,8 @@ test("insert, list, and search memories", async () => {
     },
     privacy: {
       redacted: true,
-      public_safe: true
+      public_safe: true,
+      redaction_warnings: []
     }
   });
 
@@ -81,7 +82,8 @@ test("insert, list, and search memories", async () => {
       },
       privacy: {
         redacted: true,
-        public_safe: true
+        public_safe: true,
+        redaction_warnings: []
       }
     }),
     dbPath
@@ -132,7 +134,8 @@ test("search normalizes punctuation and matches all query terms", async () => {
       },
       privacy: {
         redacted: true,
-        public_safe: true
+        public_safe: true,
+        redaction_warnings: []
       }
     }),
     dbPath

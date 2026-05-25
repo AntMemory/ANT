@@ -246,11 +246,13 @@ function everyFieldSecrets(): string[] {
   ];
 }
 
-function runCli(args: string[], cwd: string): ReturnType<typeof spawnSync> {
+type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
+
+function runCli(args: string[], cwd: string): CliResult {
   return spawnSync(process.execPath, [tsxPath, cliPath, ...args], {
     cwd,
     encoding: "utf8"
-  });
+  }) as CliResult;
 }
 
 function escapeRegExp(value: string): string {

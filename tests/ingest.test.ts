@@ -138,14 +138,16 @@ test("ant ingest --interactive requires solved fields and creates complete memor
   assert.match(search.stdout, /docker build passed/);
 });
 
-function runCli(args: string[], cwd: string, input?: string): ReturnType<typeof spawnSync> {
+type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
+
+function runCli(args: string[], cwd: string, input?: string): CliResult {
   const cliPath = path.join(process.cwd(), "src", "cli.ts");
   const tsxPath = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.cjs");
   return spawnSync(process.execPath, [tsxPath, cliPath, ...args], {
     cwd,
     input,
     encoding: "utf8"
-  });
+  }) as CliResult;
 }
 
 function extractMemoryId(output: string): string {

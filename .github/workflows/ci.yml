@@ -18,7 +18,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run tests
         run: npm test
@@ -26,8 +26,20 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Run E2E
         run: npm run test:e2e
 
+      - name: Run MCP smoke test
+        run: npm run test:mcp
+
       - name: Run demo
         run: npm run demo
+
+      - name: Build website
+        run: npm run website:build
+
+      - name: Verify package
+        run: npm run verify:pack

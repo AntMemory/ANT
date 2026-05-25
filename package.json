@@ -3,19 +3,31 @@
   "version": "0.0.0",
   "description": "ANT v0: a local-first collective memory tool for AI coding agents.",
   "type": "commonjs",
+  "license": "MIT",
   "bin": {
     "ant": "./dist/cli.js",
     "ant-mcp": "./dist/mcp.js",
     "ant-cloud": "./dist/cloud.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "tsc",
     "cloud": "node dist/cloud.js",
     "demo": "tsx scripts/demo.ts",
     "dev:api": "tsx src/cloud.ts",
+    "prepack": "npm run build",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:e2e": "tsx scripts/e2e.ts",
     "test:mcp": "npm run build && node --import tsx scripts/mcp-smoke.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "verify:pack": "tsx scripts/verify-pack.ts",
     "start": "tsx src/cli.ts",
     "website:build": "vite build --config website/vite.config.ts",
     "website:dev": "vite --config website/vite.config.ts",
