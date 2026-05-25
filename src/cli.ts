@@ -7,7 +7,16 @@ import { memoryDraftFromLog } from "./ingest";
 import { startAntMcpServer } from "./mcp";
 import { redactText } from "./redact";
 import { createMemory } from "./schema";
-import { dedupeMemories, defaultDbPath, initDatabase, listMemories, saveMemory, searchMemories } from "./db";
+import {
+  dedupeMemories,
+  defaultDbPath,
+  getMemory,
+  initDatabase,
+  listMemories,
+  saveMemory,
+  searchMemories,
+  updateMemory
+} from "./db";
 import { markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory } from "./cloudClient";
 import { startCloudServer } from "./cloudServer";
 import { assertCanSync } from "./cloudSafety";
@@ -53,6 +62,40 @@ async function main(argv: string[]): Promise<void> {
       if (!result.memory.privacy.public_safe) {
         console.log("Status: pending completion or privacy review");
       }
+      return;
+    }
+
+    if (command === "drafts") {
+      const drafts = (await listMemories()).filter(isDraftMemory);
+      printMemories(drafts, "No draft memories.");
+      return;
+    }
+
+    if (command === "complete") {
+      const id = args[0];
+      if (!id) {
+        throw new Error("Usage: ant complete <draft_id>");
+      }
+
+      const draft = await getMemory(id);
+      if (!draft) {
+        throw new Error(`Draft not found: ${id}`);
+      }
+      if (!isDraftMemory(draft)) {
+        throw new Error(`Memory is not an incomplete draft: ${id}`);
+      }
+
+      const completedInput = await completeIngestDraft(draft);
+      const completed = createMemory(completedInput);
+      await updateMemory(
+        {
+          ...completed,
+          id: draft.id,
+          created_at: draft.created_at,
+          updated_at: new Date().toISOString()
+        }
+      );
+      console.log(`Completed draft: ${draft.title} (${draft.id})`);
       return;
     }
 
@@ -319,6 +362,10 @@ function completeDraft(
   };
 }
 
+function isDraftMemory(memory: Memory): boolean {
+  return memory.privacy.redaction_warnings.includes("draft incomplete");
+}
+
 function promptForMemoryFromLines(lines: string[]): NewMemoryInput {
   let index = 0;
   const next = (label: string, required = false): string => {
@@ -520,6 +567,8 @@ Usage:
   ant remember --from-file error.log
   ant ingest <log-file>
   ant ingest <log-file> --interactive
+  ant drafts
+  ant complete <draft_id>
   ant redact <file>
   ant search <query>
   ant search --global <query>

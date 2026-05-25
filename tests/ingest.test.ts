@@ -59,6 +59,51 @@ test("ant ingest creates pending draft memory", () => {
   assert.equal(pending.status, 0, pending.stderr);
   assert.match(pending.stdout, /draft incomplete/);
   assert.match(pending.stdout, /Draft memory:/);
+
+  const drafts = runCli(["drafts"], cwd);
+  assert.equal(drafts.status, 0, drafts.stderr);
+  assert.match(drafts.stdout, /Draft from log npm-nextjs\.log/);
+});
+
+test("ant complete requires solved fields and updates the draft memory", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-complete-draft-"));
+  const logPath = path.join(examplesRoot, "npm-nextjs.log");
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  const ingest = runCli(["ingest", logPath], cwd);
+  assert.equal(ingest.status, 0, ingest.stderr);
+  const draftId = extractMemoryId(ingest.stdout);
+
+  const incomplete = runCli(["complete", draftId], cwd, "\n");
+  assert.notEqual(incomplete.status, 0);
+  assert.match(incomplete.stderr, /cause is required/);
+
+  const complete = runCli(
+    ["complete", draftId],
+    cwd,
+    [
+      "Next.js 15 treats app router params as a Promise.",
+      "Type params as a Promise and await params before destructuring.",
+      "Change params type to Promise; await params before use",
+      "npm run build",
+      "const { slug } = await params",
+      "npm run build passed",
+      "npm run build",
+      "Y"
+    ].join("\n")
+  );
+
+  assert.equal(complete.status, 0, complete.stderr);
+  assert.match(complete.stdout, new RegExp(`Completed draft: .*${draftId}`));
+
+  const drafts = runCli(["drafts"], cwd);
+  assert.equal(drafts.status, 0, drafts.stderr);
+  assert.match(drafts.stdout, /No draft memories\./);
+
+  const search = runCli(["search", "nextjs pageprops"], cwd);
+  assert.equal(search.status, 0, search.stderr);
+  assert.match(search.stdout, /npm run build passed/);
+  assert.match(search.stdout, /Public safe: yes/);
 });
 
 test("ant ingest --interactive requires solved fields and creates complete memory", () => {
@@ -101,4 +146,10 @@ function runCli(args: string[], cwd: string, input?: string): ReturnType<typeof 
     input,
     encoding: "utf8"
   });
+}
+
+function extractMemoryId(output: string): string {
+  const match = output.match(/\(([0-9a-f-]+)\)/);
+  assert.ok(match, `Could not extract memory id from output:\n${output}`);
+  return match[1];
 }

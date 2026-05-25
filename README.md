@@ -105,6 +105,8 @@ Ingest an agent or build log as a pending draft:
 ```bash
 ant ingest examples/logs/npm-nextjs.log
 ant ingest examples/logs/npm-nextjs.log --interactive
+ant drafts
+ant complete <draft_id>
 ```
 
 Search local memories:
