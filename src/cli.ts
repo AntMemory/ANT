@@ -6,7 +6,7 @@ import { memoryFromJson, memoryFromLog } from "./input";
 import { startAntMcpServer } from "./mcp";
 import { redactText } from "./redact";
 import { createMemory } from "./schema";
-import { defaultDbPath, initDatabase, insertMemory, listMemories, searchMemories } from "./db";
+import { dedupeMemories, defaultDbPath, initDatabase, listMemories, saveMemory, searchMemories } from "./db";
 import { markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory } from "./cloudClient";
 import { startCloudServer } from "./cloudServer";
 import { assertCanSync } from "./cloudSafety";
@@ -27,8 +27,12 @@ async function main(argv: string[]): Promise<void> {
 
     if (command === "remember") {
       const memory = createMemory(await readMemoryInput(args));
-      await insertMemory(memory);
-      console.log(`Remembered: ${memory.title} (${memory.id})`);
+      const result = await saveMemory(memory, { forceNew: args.includes("--force-new") });
+      if (result.merged) {
+        console.log(`Merged with existing memory: ${result.memory.title} (${result.memory.id})`);
+      } else {
+        console.log(`Remembered: ${result.memory.title} (${result.memory.id})`);
+      }
       return;
     }
 
@@ -78,6 +82,19 @@ async function main(argv: string[]): Promise<void> {
 
     if (command === "sync") {
       await syncMemories();
+      return;
+    }
+
+    if (command === "dedupe") {
+      const dryRun = args.includes("--dry-run");
+      const candidates = await dedupeMemories({ dryRun });
+      if (candidates.length === 0) {
+        console.log("No duplicate memories found.");
+        return;
+      }
+      for (const candidate of candidates) {
+        console.log(`${dryRun ? "Would merge" : "Merged"} ${candidate.duplicate.id} into ${candidate.canonical.id}: ${candidate.reason}`);
+      }
       return;
     }
 
@@ -147,7 +164,8 @@ async function readMemoryInput(args: string[]): Promise<NewMemoryInput> {
     return memoryFromLog(filePath, fs.readFileSync(filePath, "utf8"));
   }
 
-  if (args.length > 0) {
+  const nonFlagArgs = args.filter((arg) => arg !== "--force-new");
+  if (nonFlagArgs.length > 0) {
     throw new Error("Usage: ant remember [--json memory.json] [--from-file error.log]");
   }
 
@@ -416,6 +434,8 @@ Usage:
   ant inspect
   ant inspect-pending
   ant sync
+  ant dedupe
+  ant dedupe --dry-run
   ant worked <memory_id>
   ant failed <memory_id>
   ant mcp

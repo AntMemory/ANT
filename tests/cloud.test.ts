@@ -83,6 +83,20 @@ test("worked and failed update counts", async () => {
   assert.equal(failed.body.memory.failed_count, 1);
 });
 
+test("global sync does not create duplicates", async () => {
+  const first = createMemory(safeMemory("Global duplicate one"));
+  const second = createMemory(safeMemory("Global duplicate two"));
+
+  const firstResponse = await postJson("/memories", first);
+  const secondResponse = await postJson("/memories", second);
+  const search = await getJson("/search?q=PageProps%20params%20Promise");
+
+  assert.equal(firstResponse.status, 201);
+  assert.equal(secondResponse.status, 201);
+  assert.equal(secondResponse.body.id, firstResponse.body.id);
+  assert.equal(search.body.memories.length, 1);
+});
+
 async function postJson(route: string, body: unknown): Promise<{ status: number; body: any }> {
   const response = await fetch(`${baseUrl}${route}`, {
     method: "POST",

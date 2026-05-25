@@ -55,7 +55,15 @@ test("MCP inspect_memories lists recent memories with an optional limit", async 
   const dbPath = tempDb();
   await initDatabase(dbPath);
   await saveMemoryTool({ memory: validMemory("First MCP memory") }, dbPath);
-  await saveMemoryTool({ memory: validMemory("Second MCP memory") }, dbPath);
+  await saveMemoryTool(
+    {
+      memory: {
+        ...validMemory("Second MCP memory"),
+        context: { ...validMemory("Second MCP memory").context, package_version: "2.x" }
+      }
+    },
+    dbPath
+  );
 
   const inspected = await inspectMemoriesTool({ limit: 1 }, dbPath);
 

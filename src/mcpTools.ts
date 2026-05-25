@@ -2,10 +2,10 @@ import { createMemory } from "./schema";
 import { memoryFromJson } from "./input";
 import {
   getMemory,
-  insertMemory,
   listMemories,
   listMemoryOutcomes,
   markMemoryOutcome,
+  saveMemory,
   searchMemories
 } from "./db";
 import type { Memory, MemoryContext, MemoryOutcome } from "./types";
@@ -36,8 +36,8 @@ export async function searchMemoryTool(args: SearchMemoryInput, dbPath?: string)
 
 export async function saveMemoryTool(args: { memory: unknown }, dbPath?: string): Promise<{ id: string }> {
   const memory = createMemory(memoryFromJson(args.memory));
-  await insertMemory(memory, dbPath);
-  return { id: memory.id };
+  const result = await saveMemory(memory, { dbPath });
+  return { id: result.memory.id };
 }
 
 export async function inspectMemoriesTool(args: { limit?: number } = {}, dbPath?: string): Promise<{ memories: Memory[] }> {

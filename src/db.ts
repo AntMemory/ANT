@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
+import { findDuplicate, findDuplicates, mergeMemories, type DedupeCandidate, type MergeResult } from "./dedupe";
 import { rankMemories, type RankedMemory } from "./scoring";
 import type { Memory, MemoryContext, MemoryOutcome, MemoryOutcomeStatus } from "./types";
 
@@ -60,6 +61,79 @@ export async function insertMemory(memory: Memory, dbPath = defaultDbPath()): Pr
     )
   `);
 
+  stmt.run({
+    $id: memory.id,
+    $title: memory.title,
+    $problem: memory.problem,
+    $error_signature: memory.error_signature,
+    $context: JSON.stringify(memory.context),
+    $cause: memory.cause,
+    $solution: JSON.stringify(memory.solution),
+    $evidence: JSON.stringify(memory.evidence),
+    $privacy: JSON.stringify(memory.privacy),
+    $created_at: memory.created_at,
+    $updated_at: memory.updated_at
+  });
+  stmt.free();
+  saveDatabase(db, dbPath);
+  db.close();
+}
+
+export async function saveMemory(memory: Memory, options: { forceNew?: boolean; dbPath?: string } = {}): Promise<MergeResult> {
+  const dbPath = options.dbPath ?? defaultDbPath();
+  if (options.forceNew) {
+    await insertMemory(memory, dbPath);
+    return { memory, merged: false };
+  }
+
+  const existing = await listMemories(dbPath).catch(() => []);
+  const duplicate = findDuplicate(memory, existing);
+  if (!duplicate) {
+    await insertMemory(memory, dbPath);
+    return { memory, merged: false };
+  }
+
+  const merged = mergeMemories(duplicate.canonical, memory);
+  await updateMemory(merged, dbPath);
+  return { memory: merged, merged: true, duplicateOf: duplicate.canonical.id };
+}
+
+export async function dedupeMemories(options: { dryRun?: boolean; dbPath?: string } = {}): Promise<DedupeCandidate[]> {
+  const dbPath = options.dbPath ?? defaultDbPath();
+  const memories = await listMemories(dbPath);
+  const candidates = findDuplicates(memories);
+  if (options.dryRun) {
+    return candidates;
+  }
+
+  for (const candidate of candidates) {
+    const merged = mergeMemories(candidate.canonical, candidate.duplicate);
+    await updateMemory(merged, dbPath);
+    await moveOutcomes(candidate.duplicate.id, candidate.canonical.id, dbPath);
+    await deleteMemory(candidate.duplicate.id, dbPath);
+  }
+
+  return candidates;
+}
+
+export async function updateMemory(memory: Memory, dbPath = defaultDbPath()): Promise<void> {
+  const SQL = await loadSql();
+  const db = openExistingDatabase(SQL, dbPath);
+  db.run(schemaSql);
+  const stmt = db.prepare(`
+    UPDATE memories SET
+      title = $title,
+      problem = $problem,
+      error_signature = $error_signature,
+      context = $context,
+      cause = $cause,
+      solution = $solution,
+      evidence = $evidence,
+      privacy = $privacy,
+      created_at = $created_at,
+      updated_at = $updated_at
+    WHERE id = $id
+  `);
   stmt.run({
     $id: memory.id,
     $title: memory.title,
@@ -169,6 +243,26 @@ export async function listMemoryOutcomes(memoryId: string, dbPath = defaultDbPat
   stmt.free();
   db.close();
   return outcomes;
+}
+
+async function moveOutcomes(fromId: string, toId: string, dbPath: string): Promise<void> {
+  const SQL = await loadSql();
+  const db = openExistingDatabase(SQL, dbPath);
+  const stmt = db.prepare("UPDATE memory_outcomes SET memory_id = $to WHERE memory_id = $from");
+  stmt.run({ $to: toId, $from: fromId });
+  stmt.free();
+  saveDatabase(db, dbPath);
+  db.close();
+}
+
+async function deleteMemory(id: string, dbPath: string): Promise<void> {
+  const SQL = await loadSql();
+  const db = openExistingDatabase(SQL, dbPath);
+  const stmt = db.prepare("DELETE FROM memories WHERE id = $id");
+  stmt.run({ $id: id });
+  stmt.free();
+  saveDatabase(db, dbPath);
+  db.close();
 }
 
 function selectMemories(db: Database, sql: string): Memory[] {

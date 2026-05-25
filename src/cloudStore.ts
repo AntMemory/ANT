@@ -3,6 +3,7 @@ import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { Pool } from "pg";
 import { assertCanSync } from "./cloudSafety";
+import { findDuplicate, mergeMemories } from "./dedupe";
 import { rankMemories, type RankedMemory } from "./scoring";
 import type { Memory, MemoryContext } from "./types";
 
@@ -87,7 +88,10 @@ class SqliteCloudStore implements CloudStore {
     const SQL = await loadSql();
     const db = openSqlite(SQL, this.dbPath);
     db.run(sqliteSchema);
-    const existing = getSqliteMemory(db, memory.id);
+    const existingMemories = getSqliteMemories(db);
+    const duplicate = findDuplicate(memory, existingMemories);
+    const target = duplicate ? mergeMemories(duplicate.canonical, memory) : memory;
+    const existing = getSqliteMemory(db, target.id);
     const counts = existing ? { worked: existing.worked_count, failed: existing.failed_count } : { worked: 0, failed: 0 };
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO cloud_memories (
@@ -99,22 +103,22 @@ class SqliteCloudStore implements CloudStore {
       )
     `);
     stmt.run({
-      $id: memory.id,
-      $title: memory.title,
-      $problem: memory.problem,
-      $error_signature: memory.error_signature,
-      $context: JSON.stringify(memory.context),
-      $cause: memory.cause,
-      $solution: JSON.stringify(memory.solution),
-      $evidence: JSON.stringify(memory.evidence),
-      $privacy: JSON.stringify(memory.privacy),
-      $created_at: memory.created_at,
-      $updated_at: memory.updated_at,
+      $id: target.id,
+      $title: target.title,
+      $problem: target.problem,
+      $error_signature: target.error_signature,
+      $context: JSON.stringify(target.context),
+      $cause: target.cause,
+      $solution: JSON.stringify(target.solution),
+      $evidence: JSON.stringify(target.evidence),
+      $privacy: JSON.stringify(target.privacy),
+      $created_at: target.created_at,
+      $updated_at: target.updated_at,
       $worked_count: counts.worked,
       $failed_count: counts.failed
     });
     stmt.free();
-    const saved = getSqliteMemory(db, memory.id);
+    const saved = getSqliteMemory(db, target.id);
     saveSqlite(db, this.dbPath);
     db.close();
     if (!saved) {
@@ -177,6 +181,9 @@ class PostgresCloudStore implements CloudStore {
   async save(memory: Memory): Promise<CloudMemory> {
     assertCanSync(memory);
     await this.init();
+    const existing = await this.pool.query("SELECT * FROM cloud_memories ORDER BY updated_at DESC");
+    const duplicate = findDuplicate(memory, existing.rows.map(pgRowToMemory));
+    const target = duplicate ? mergeMemories(duplicate.canonical, memory) : memory;
     const result = await this.pool.query(
       `
       INSERT INTO cloud_memories (
@@ -196,17 +203,17 @@ class PostgresCloudStore implements CloudStore {
       RETURNING *
     `,
       [
-        memory.id,
-        memory.title,
-        memory.problem,
-        memory.error_signature,
-        memory.context,
-        memory.cause,
-        memory.solution,
-        memory.evidence,
-        memory.privacy,
-        memory.created_at,
-        memory.updated_at
+        target.id,
+        target.title,
+        target.problem,
+        target.error_signature,
+        target.context,
+        target.cause,
+        target.solution,
+        target.evidence,
+        target.privacy,
+        target.created_at,
+        target.updated_at
       ]
     );
     return pgRowToMemory(result.rows[0]);
