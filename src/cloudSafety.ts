@@ -15,6 +15,10 @@ export function assertCanSync(memory: Memory): void {
     throw new Error(`Memory ${memory.id} is not public-safe and will not be synced.`);
   }
 
+  if (memory.privacy.redaction_warnings.includes("draft incomplete")) {
+    throw new Error(`Memory ${memory.id} is a draft or incomplete memory and will not be synced.`);
+  }
+
   const highWarnings = memory.privacy.redaction_warnings.filter((warning) => highSeverityWarnings.has(warning));
   if (highWarnings.length > 0) {
     throw new Error(`Memory ${memory.id} has high-severity redaction warnings: ${highWarnings.join(", ")}`);

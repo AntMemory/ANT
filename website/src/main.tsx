@@ -110,6 +110,11 @@ const docs: Record<string, DocPage> = {
         code: "npm run dev:api"
       },
       {
+        heading: "Optional Token",
+        body: "Set ANT_CLOUD_TOKEN to require bearer-token auth for upload, search, worked, and failed routes. Without it, the API is local unauthenticated alpha mode.",
+        code: "ANT_CLOUD_TOKEN=change-me npm run dev:api\nANT_CLOUD_TOKEN=change-me ant sync"
+      },
+      {
         heading: "Sync And Search",
         code: "ant sync\nant search --global \"prisma generate cache\"\nant worked <memory_id>\nant failed <memory_id>"
       },
@@ -118,8 +123,10 @@ const docs: Record<string, DocPage> = {
         bullets: [
           "Only public-safe memories sync",
           "High-severity redaction warnings block sync",
+          "Draft or incomplete memories do not sync",
           "Raw files and raw chat logs are never synced",
-          "Inspect memories before sharing"
+          "Inspect memories before sharing",
+          "Do not expose the alpha API publicly without a reverse proxy and rate limiting"
         ]
       }
     ]

@@ -247,13 +247,24 @@ Cloud sync refuses memories that are not public-safe and also blocks memories ca
 
 ## Cloud Sync Alpha
 
-Cloud sync is an alpha feature for sharing redacted, public-safe memories across machines. It is not production collaboration infrastructure and has no dashboard, team management, billing, or authentication yet.
+Cloud sync is an alpha feature for sharing redacted, public-safe memories across machines. It is not production collaboration infrastructure and has no dashboard, team management, billing, or multi-user security model yet.
 
 Start the local API:
 
 ```bash
 npm run dev:api
 ```
+
+By default the local alpha API runs unauthenticated and prints a warning. For any non-local use, set a minimal bearer token:
+
+```bash
+ANT_CLOUD_TOKEN=change-me npm run dev:api
+ANT_CLOUD_TOKEN=change-me ant sync
+```
+
+When `ANT_CLOUD_TOKEN` is set, the API requires `Authorization: Bearer <token>` for memory upload, global search, and worked/failed feedback. The CLI sends this header automatically when the same environment variable is set.
+
+Do not expose the alpha API directly to the public internet without a reverse proxy, TLS, request limits, and rate limiting. Token auth is only minimal alpha protection, not production multi-user security.
 
 Compiled API:
 
@@ -288,7 +299,12 @@ Safety rules:
 
 - Only `privacy.public_safe = true` memories sync.
 - High-severity redaction warnings block sync.
+- Draft/incomplete memories block sync.
 - Raw files and raw chat logs are never synced.
+- JSON request bodies are size-limited and malformed JSON is rejected.
+- The server owns timestamps and worked/failed counters.
+
+ANT preserves a client-provided memory id only when it is a valid UUID. This keeps local and global references stable for sync while rejecting arbitrary ids.
 
 ## Quality Scoring And Ranking
 

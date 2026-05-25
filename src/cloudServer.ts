@@ -4,10 +4,31 @@ import { memoryFromJson } from "./input";
 import { createMemory } from "./schema";
 import type { Memory } from "./types";
 
-export function createCloudServer(store: CloudStore = createCloudStore()): http.Server {
+const DEFAULT_JSON_BODY_LIMIT_BYTES = 256 * 1024;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export type CloudServerOptions = {
+  token?: string;
+  jsonBodyLimitBytes?: number;
+};
+
+type CloudServerConfig = {
+  token: string | undefined;
+  jsonBodyLimitBytes: number;
+};
+
+export function createCloudServer(
+  store: CloudStore = createCloudStore(),
+  options: CloudServerOptions = {}
+): http.Server {
+  const config = {
+    token: options.token ?? process.env.ANT_CLOUD_TOKEN,
+    jsonBodyLimitBytes: options.jsonBodyLimitBytes ?? DEFAULT_JSON_BODY_LIMIT_BYTES
+  };
+
   return http.createServer(async (req, res) => {
     try {
-      await route(req, res, store);
+      await route(req, res, store, config);
     } catch (error) {
       sendJson(res, statusForError(error), {
         error: error instanceof Error ? error.message : String(error)
@@ -19,24 +40,36 @@ export function createCloudServer(store: CloudStore = createCloudStore()): http.
 export async function startCloudServer(port = Number(process.env.PORT ?? 3737)): Promise<http.Server> {
   const store = createCloudStore();
   await store.init();
+  if (!process.env.ANT_CLOUD_TOKEN) {
+    console.error("Warning: ANT_CLOUD_TOKEN is not set. Running unauthenticated local alpha cloud API.");
+  }
   const server = createCloudServer(store);
   await new Promise<void>((resolve) => server.listen(port, resolve));
   console.error(`ANT cloud alpha listening on http://localhost:${port}`);
   return server;
 }
 
-async function route(req: IncomingMessage, res: ServerResponse, store: CloudStore): Promise<void> {
+async function route(
+  req: IncomingMessage,
+  res: ServerResponse,
+  store: CloudStore,
+  options: CloudServerConfig
+): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
 
-  if (req.method === "POST" && url.pathname === "/memories") {
-    const body = await readJson(req);
+  if (url.pathname === "/memories") {
+    requireMethod(req, ["POST"]);
+    requireAuth(req, options.token);
+    const body = await readJson(req, options.jsonBodyLimitBytes);
     const memory = memoryFromRequest(body);
     const saved = await store.save(memory);
     sendJson(res, 201, { id: saved.id, memory: saved });
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/search") {
+  if (url.pathname === "/search") {
+    requireMethod(req, ["GET"]);
+    requireAuth(req, options.token);
     const query = url.searchParams.get("q") ?? "";
     const context = parseContext(url.searchParams.get("context"));
     sendJson(res, 200, { memories: await store.search(query, context) });
@@ -44,14 +77,18 @@ async function route(req: IncomingMessage, res: ServerResponse, store: CloudStor
   }
 
   const workedMatch = url.pathname.match(/^\/memories\/([^/]+)\/worked$/);
-  if (req.method === "POST" && workedMatch) {
+  if (workedMatch) {
+    requireMethod(req, ["POST"]);
+    requireAuth(req, options.token);
     const memory = await store.markWorked(decodeURIComponent(workedMatch[1]));
     sendJson(res, 200, { message: `Memory ${memory.id} marked worked.`, memory });
     return;
   }
 
   const failedMatch = url.pathname.match(/^\/memories\/([^/]+)\/failed$/);
-  if (req.method === "POST" && failedMatch) {
+  if (failedMatch) {
+    requireMethod(req, ["POST"]);
+    requireAuth(req, options.token);
     const memory = await store.markFailed(decodeURIComponent(failedMatch[1]));
     sendJson(res, 200, { message: `Memory ${memory.id} marked failed.`, memory });
     return;
@@ -65,33 +102,49 @@ function memoryFromRequest(body: unknown): Memory {
   if (body && typeof body === "object") {
     const maybeMemory = body as Record<string, unknown>;
     if (typeof maybeMemory.id === "string" && maybeMemory.id.trim()) {
+      if (!uuidPattern.test(maybeMemory.id)) {
+        throw new HttpError(400, "Memory id must be a UUID when provided.");
+      }
       memory.id = maybeMemory.id;
-    }
-    if (typeof maybeMemory.created_at === "string" && maybeMemory.created_at.trim()) {
-      memory.created_at = maybeMemory.created_at;
-    }
-    if (typeof maybeMemory.updated_at === "string" && maybeMemory.updated_at.trim()) {
-      memory.updated_at = maybeMemory.updated_at;
     }
   }
   return memory;
 }
 
-async function readJson(req: IncomingMessage): Promise<unknown> {
+async function readJson(req: IncomingMessage, limitBytes: number): Promise<unknown> {
+  const contentLength = req.headers["content-length"];
+  if (typeof contentLength === "string" && Number(contentLength) > limitBytes) {
+    throw new HttpError(413, `JSON body exceeds ${limitBytes} bytes.`);
+  }
+
   const chunks: Buffer[] = [];
+  let size = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limitBytes) {
+      throw new HttpError(413, `JSON body exceeds ${limitBytes} bytes.`);
+    }
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new HttpError(400, "Malformed JSON body.");
+  }
 }
 
 function parseContext(raw: string | null): Record<string, string> {
   if (!raw) {
     return {};
   }
-  const parsed = JSON.parse(raw);
-  return parsed && typeof parsed === "object" ? parsed : {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    throw new HttpError(400, "Malformed search context JSON.");
+  }
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -100,12 +153,40 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 function statusForError(error: unknown): number {
+  if (error instanceof HttpError) {
+    return error.status;
+  }
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("not public-safe") || message.includes("high-severity")) {
+  if (message.includes("not public-safe") || message.includes("high-severity") || message.includes("draft or incomplete")) {
     return 400;
   }
   if (message.includes("not found") || message.includes("Not found")) {
     return 404;
   }
   return 500;
+}
+
+function requireMethod(req: IncomingMessage, allowed: string[]): void {
+  if (!req.method || !allowed.includes(req.method)) {
+    throw new HttpError(405, `Method ${req.method ?? "UNKNOWN"} not allowed. Use ${allowed.join(", ")}.`);
+  }
+}
+
+function requireAuth(req: IncomingMessage, token: string | undefined): void {
+  if (!token) {
+    return;
+  }
+
+  if (req.headers.authorization !== `Bearer ${token}`) {
+    throw new HttpError(401, "Unauthorized.");
+  }
+}
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+  }
 }
