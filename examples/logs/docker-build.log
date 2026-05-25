@@ -1,0 +1,16 @@
+#0 building with "desktop-linux" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 190B done
+#2 [internal] load metadata for docker.io/library/node:20-alpine
+#2 DONE 0.3s
+FROM node:20-alpine
+#3 [3/4] COPY package.json package-lock.json ./
+#3 ERROR: failed to compute cache key: failed to calculate checksum of ref missing-file: "/package-lock.json": not found
+------
+Dockerfile:5
+--------------------
+   3 | WORKDIR /app
+   4 | COPY package.json package-lock.json ./
+   5 | RUN npm ci
+--------------------
+failed to solve: failed to compute cache key: failed to calculate checksum of ref missing-file: "/package-lock.json": not found

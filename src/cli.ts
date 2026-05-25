@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { memoryFromJson, memoryFromLog } from "./input";
+import { memoryDraftFromLog } from "./ingest";
 import { startAntMcpServer } from "./mcp";
 import { redactText } from "./redact";
 import { createMemory } from "./schema";
@@ -32,6 +33,25 @@ async function main(argv: string[]): Promise<void> {
         console.log(`Merged with existing memory: ${result.memory.title} (${result.memory.id})`);
       } else {
         console.log(`Remembered: ${result.memory.title} (${result.memory.id})`);
+      }
+      return;
+    }
+
+    if (command === "ingest") {
+      const filePath = args.find((arg) => !arg.startsWith("--"));
+      if (!filePath) {
+        throw new Error("Usage: ant ingest <log-file> [--interactive]");
+      }
+
+      let memory = memoryDraftFromLog(filePath, fs.readFileSync(filePath, "utf8"));
+      if (args.includes("--interactive")) {
+        memory = await completeIngestDraft(memory);
+      }
+
+      const result = await saveMemory(createMemory(memory));
+      console.log(`${args.includes("--interactive") ? "Ingested" : "Draft memory created"}: ${result.memory.title} (${result.memory.id})`);
+      if (!result.memory.privacy.public_safe) {
+        console.log("Status: pending completion or privacy review");
       }
       return;
     }
@@ -227,6 +247,76 @@ async function promptForMemory(): Promise<NewMemoryInput> {
   } finally {
     rl.close();
   }
+}
+
+async function completeIngestDraft(draft: NewMemoryInput): Promise<NewMemoryInput> {
+  if (!input.isTTY) {
+    return completeIngestDraftFromLines(draft, fs.readFileSync(0, "utf8").split(/\r?\n/));
+  }
+
+  const rl = createInterface({ input, output });
+  try {
+    const cause = await askRequired(rl, "Cause");
+    const summary = await askRequired(rl, "Solution summary");
+    const steps = splitList(await askRequired(rl, "Solution steps (semicolon-separated)"));
+    const commands = splitList(await askOptional(rl, "Solution commands (semicolon-separated)"));
+    const patch_example = await askOptional(rl, "Patch example");
+    const verification_type = await askRequired(rl, "Evidence / verification type");
+    const commands_run = splitList(await askOptional(rl, "Commands run (semicolon-separated)"));
+    const public_safe = await askBoolean(rl, "Is this public-safe?", draft.privacy.redaction_warnings.length === 0);
+
+    return completeDraft(draft, cause, summary, steps, commands, patch_example, verification_type, commands_run, public_safe);
+  } finally {
+    rl.close();
+  }
+}
+
+function completeIngestDraftFromLines(draft: NewMemoryInput, lines: string[]): NewMemoryInput {
+  let index = 0;
+  const next = (label: string, required = false): string => {
+    const value = (lines[index++] ?? "").trim();
+    if (required && !value) {
+      throw new Error(`${label} is required`);
+    }
+
+    return value;
+  };
+
+  return completeDraft(
+    draft,
+    next("cause", true),
+    next("solution.summary", true),
+    splitList(next("solution.steps", true)),
+    splitList(next("solution.commands")),
+    next("solution.patch_example"),
+    next("evidence.verification_type", true),
+    splitList(next("evidence.commands_run")),
+    parseBoolean(next("privacy.public_safe"), draft.privacy.redaction_warnings.length === 0)
+  );
+}
+
+function completeDraft(
+  draft: NewMemoryInput,
+  cause: string,
+  summary: string,
+  steps: string[],
+  commands: string[],
+  patch_example: string,
+  verification_type: string,
+  commands_run: string[],
+  public_safe: boolean
+): NewMemoryInput {
+  return {
+    ...draft,
+    cause,
+    solution: { summary, steps, commands, patch_example },
+    evidence: { verification_type, commands_run },
+    privacy: {
+      ...draft.privacy,
+      public_safe,
+      redaction_warnings: draft.privacy.redaction_warnings.filter((warning) => warning !== "draft incomplete")
+    }
+  };
 }
 
 function promptForMemoryFromLines(lines: string[]): NewMemoryInput {
@@ -428,6 +518,8 @@ Usage:
   ant remember
   ant remember --json memory.json
   ant remember --from-file error.log
+  ant ingest <log-file>
+  ant ingest <log-file> --interactive
   ant redact <file>
   ant search <query>
   ant search --global <query>

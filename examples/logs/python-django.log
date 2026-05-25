@@ -1,0 +1,7 @@
+Python 3.12.1
+Traceback (most recent call last):
+  File "/Users/alice/Documents/SecretProject/manage.py", line 22, in <module>
+    main()
+  File "/Users/alice/Documents/SecretProject/manage.py", line 13, in main
+    from django.core.management import execute_from_command_line
+ModuleNotFoundError: No module named 'django'

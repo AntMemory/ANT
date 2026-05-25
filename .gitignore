@@ -6,6 +6,7 @@ dist-website/
 .env
 .env.*
 *.log
+!examples/logs/*.log
 *.pem
 *.key
 *.p12

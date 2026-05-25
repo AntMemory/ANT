@@ -1,0 +1,13 @@
+> app@0.1.0 build
+> next build
+
+▲ Next.js 15.0.3
+Creating an optimized production build ...
+Failed to compile.
+
+app/blog/[slug]/page.tsx
+Type error: Type '{ params: { slug: string } }' does not satisfy the constraint 'PageProps'.
+
+npm ERR! code 1
+npm ERR! command failed
+npm ERR! command sh -c next build

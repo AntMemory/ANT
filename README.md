@@ -100,6 +100,13 @@ Import an error log as a structured local memory:
 ant remember --from-file error.log
 ```
 
+Ingest an agent or build log as a pending draft:
+
+```bash
+ant ingest examples/logs/npm-nextjs.log
+ant ingest examples/logs/npm-nextjs.log --interactive
+```
+
 Search local memories:
 
 ```bash

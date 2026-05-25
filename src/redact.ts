@@ -159,7 +159,7 @@ function pathTail(value: string): string {
     return `/${parts.slice(anchor).join("/")}`;
   }
 
-  const tail = parts.slice(-2).join("/");
+  const tail = parts.at(-1);
   return tail ? `/${tail}` : "";
 }
 
