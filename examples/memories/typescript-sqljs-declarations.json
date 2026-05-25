@@ -1,0 +1,33 @@
+{
+  "title": "Add sql.js declarations for TypeScript builds",
+  "problem": "TypeScript build fails because sql.js does not provide declarations for the imported API.",
+  "error_signature": "TS7016: Could not find a declaration file for module 'sql.js'",
+  "context": {
+    "language": "TypeScript",
+    "framework": "node:test",
+    "package_name": "sql.js",
+    "package_version": "1.10.3",
+    "runtime": "Node 20",
+    "os": "Windows",
+    "tool": "Codex"
+  },
+  "cause": "The dependency ships JavaScript without the TypeScript declarations needed by the project.",
+  "solution": {
+    "summary": "Add a narrow local declaration file for the sql.js API used by the codebase.",
+    "steps": [
+      "Create src/sql-js.d.ts",
+      "Declare the Database and Statement methods the project calls",
+      "Run npm run build"
+    ],
+    "commands": ["npm run build", "npm test"],
+    "patch_example": "declare module \"sql.js\" { export type Database = { run(sql: string): void } }"
+  },
+  "evidence": {
+    "verification_type": "automated build and tests",
+    "commands_run": ["npm run build", "npm test"]
+  },
+  "privacy": {
+    "redacted": true,
+    "public_safe": true
+  }
+}

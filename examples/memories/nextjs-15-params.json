@@ -1,0 +1,33 @@
+{
+  "title": "Next.js 15 params must be awaited",
+  "problem": "Build fails because dynamic route params are treated as a Promise.",
+  "error_signature": "Type error: Type '{ params: { slug: string } }' does not satisfy the constraint 'PageProps'",
+  "context": {
+    "language": "TypeScript",
+    "framework": "Next.js",
+    "package_name": "next",
+    "package_version": "15.x",
+    "runtime": "Node 20",
+    "os": "Windows",
+    "tool": "Codex"
+  },
+  "cause": "Next.js 15 changed app router params/searchParams behavior.",
+  "solution": {
+    "summary": "Await params before destructuring.",
+    "steps": [
+      "Change params type to Promise<{ slug: string }>",
+      "Use const { slug } = await params",
+      "Run npm run build"
+    ],
+    "commands": ["npm run build"],
+    "patch_example": "const { slug } = await params"
+  },
+  "evidence": {
+    "verification_type": "automated build",
+    "commands_run": ["npm run build"]
+  },
+  "privacy": {
+    "redacted": true,
+    "public_safe": true
+  }
+}

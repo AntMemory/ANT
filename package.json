@@ -1,0 +1,35 @@
+{
+  "name": "ant-memory-ai",
+  "version": "0.0.0",
+  "description": "ANT v0: a local-first collective memory tool for AI coding agents.",
+  "type": "commonjs",
+  "bin": {
+    "ant": "./dist/cli.js",
+    "ant-mcp": "./dist/mcp.js",
+    "ant-cloud": "./dist/cloud.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "cloud": "node dist/cloud.js",
+    "demo": "tsx scripts/demo.ts",
+    "dev:api": "tsx src/cloud.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:e2e": "tsx scripts/e2e.ts",
+    "test:mcp": "npm run build && node --import tsx scripts/mcp-smoke.ts",
+    "start": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "pg": "^8.21.0",
+    "sql.js": "^1.10.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.ant/
+.ant-cloud/
+.env
+.env.*
+*.log
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.db
+examples/manual-test/
