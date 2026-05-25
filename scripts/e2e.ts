@@ -16,7 +16,7 @@ let cloud: ChildProcessWithoutNullStreams | undefined;
 
 async function main(): Promise<void> {
   step("build local CLI");
-  run("cmd.exe", ["/c", "npm run build"], repoRoot);
+  runNpmScript("build");
 
   step("start local cloud API");
   cloud = startCloud();
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
   assert.match(redacted.stdout, /\[REDACTED_PATH\]\/src\/index\.ts/, "redact did not preserve useful path tail");
 
   step("MCP smoke test");
-  run("cmd.exe", ["/c", "npm run test:mcp"], repoRoot);
+  runNpmScript("test:mcp");
 
   console.log("ANT E2E test passed");
 }
@@ -119,6 +119,14 @@ function runCli(args: string[]): { stdout: string; stderr: string } {
     ANT_CLOUD_URL: cloudUrl,
     DATABASE_URL: ""
   });
+}
+
+function runNpmScript(script: string): { stdout: string; stderr: string } {
+  if (process.platform === "win32") {
+    return run("cmd.exe", ["/c", "npm", "run", script], repoRoot);
+  }
+
+  return run("npm", ["run", script], repoRoot);
 }
 
 function run(

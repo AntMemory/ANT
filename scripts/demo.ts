@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   line(tempRoot);
 
   section("1. Build local CLI");
-  run("cmd.exe", ["/c", "npm run build"], repoRoot, {}, false);
+  runNpmScript("build", false);
   ok("CLI built.");
 
   section("2. Start local cloud API");
@@ -108,6 +108,14 @@ function runCli(args: string[]): { stdout: string; stderr: string } {
     ANT_CLOUD_URL: cloudUrl,
     DATABASE_URL: ""
   });
+}
+
+function runNpmScript(script: string, capture = true): { stdout: string; stderr: string } {
+  if (process.platform === "win32") {
+    return run("cmd.exe", ["/c", "npm", "run", script], repoRoot, {}, capture);
+  }
+
+  return run("npm", ["run", script], repoRoot, {}, capture);
 }
 
 function run(

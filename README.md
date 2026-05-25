@@ -1,5 +1,7 @@
 # ANT
 
+[![CI](https://github.com/AntMemory/ANT/actions/workflows/ci.yml/badge.svg)](https://github.com/AntMemory/ANT/actions/workflows/ci.yml)
+
 ANT is a local-first memory tool for AI coding agents. It stores solved coding issues as structured memories so future agents can search for prior fixes instead of rediscovering them from scratch.
 
 ANT is not a chat-log archive. A memory is a small, explicit bugfix record: problem, error signature, context, cause, solution, evidence, and privacy metadata.
