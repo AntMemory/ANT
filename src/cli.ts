@@ -1,10 +1,15 @@
 #!/usr/bin/env node
+import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { memoryFromJson, memoryFromLog } from "./input";
 import { memoryDraftFromLog } from "./ingest";
-import { startAntMcpServer } from "./mcp";
+import { ANT_MCP_TOOL_NAMES, startAntMcpServer } from "./mcp";
 import { redactText } from "./redact";
 import { createMemory } from "./schema";
 import {
@@ -99,6 +104,11 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
 
+    if (command === "run") {
+      await runCommand(args);
+      return;
+    }
+
     if (command === "search") {
       if (args[0] === "--global") {
         const query = args.slice(1).join(" ").trim();
@@ -180,6 +190,20 @@ async function main(argv: string[]): Promise<void> {
     }
 
     if (command === "mcp") {
+      if (args[0] === "config") {
+        printMcpConfig();
+        return;
+      }
+
+      if (args[0] === "doctor") {
+        await runMcpDoctor();
+        return;
+      }
+
+      if (args.length > 0) {
+        throw new Error("Usage: ant mcp [config|doctor]");
+      }
+
       await startAntMcpServer();
       return;
     }
@@ -214,6 +238,271 @@ async function syncMemories(): Promise<void> {
   }
 
   console.log(`Sync complete. synced=${synced} skipped=${skipped}`);
+}
+
+function printMcpConfig(): void {
+  console.log(
+    JSON.stringify(
+      {
+        mcpServers: {
+          ant: {
+            command: "ant",
+            args: ["mcp"]
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+}
+
+async function runMcpDoctor(): Promise<void> {
+  const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
+
+  const cliEntry = process.argv[1];
+  checks.push({
+    label: "ANT CLI available",
+    ok: Boolean(cliEntry && fs.existsSync(cliEntry)),
+    detail: cliEntry && fs.existsSync(cliEntry) ? cliEntry : "Current CLI entrypoint was not found"
+  });
+
+  const dbPath = defaultDbPath();
+  try {
+    await initDatabase(dbPath);
+    checks.push({
+      label: "Local database ready",
+      ok: true,
+      detail: dbPath
+    });
+  } catch (error) {
+    checks.push({
+      label: "Local database ready",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error)
+    });
+  }
+
+  let toolNames: string[] | undefined;
+  try {
+    toolNames = await withTimeout(listMcpToolsFromServer(), 10_000, "MCP server startup timed out");
+    checks.push({
+      label: "MCP server starts",
+      ok: true,
+      detail: "stdio connection established"
+    });
+  } catch (error) {
+    checks.push({
+      label: "MCP server starts",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error)
+    });
+  }
+
+  if (toolNames) {
+    const missing = ANT_MCP_TOOL_NAMES.filter((name) => !toolNames.includes(name));
+    checks.push({
+      label: "Required MCP tools registered",
+      ok: missing.length === 0,
+      detail: missing.length === 0 ? toolNames.join(", ") : `Missing: ${missing.join(", ")}`
+    });
+  } else {
+    checks.push({
+      label: "Required MCP tools registered",
+      ok: false,
+      detail: "Tool list unavailable because the MCP server did not start"
+    });
+  }
+
+  console.log("ANT MCP doctor");
+  for (const check of checks) {
+    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.label}: ${check.detail}`);
+  }
+
+  if (checks.some((check) => !check.ok)) {
+    throw new Error("MCP doctor failed.");
+  }
+
+  console.log("MCP doctor passed.");
+}
+
+async function listMcpToolsFromServer(): Promise<string[]> {
+  const client = new Client({ name: "ant-mcp-doctor", version: "0.0.0" });
+  const command = mcpServerCommand();
+  const transport = new StdioClientTransport({
+    command: command.executable,
+    args: command.args,
+    cwd: process.cwd(),
+    stderr: "pipe"
+  });
+
+  try {
+    await client.connect(transport);
+    const result = await client.listTools();
+    return result.tools.map((tool) => tool.name);
+  } finally {
+    await client.close();
+  }
+}
+
+function mcpServerCommand(): { executable: string; args: string[] } {
+  const cliEntry = process.argv[1];
+  if (!cliEntry) {
+    return { executable: "ant", args: ["mcp"] };
+  }
+
+  if (cliEntry.endsWith(".ts")) {
+    const tsxCli = findLocalTsxCli(cliEntry);
+    if (fs.existsSync(tsxCli)) {
+      return { executable: process.execPath, args: [tsxCli, cliEntry, "mcp"] };
+    }
+  }
+
+  return { executable: process.execPath, args: [cliEntry, "mcp"] };
+}
+
+function findLocalTsxCli(cliEntry: string): string {
+  const candidates = [
+    path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.cjs"),
+    path.join(path.dirname(cliEntry), "..", "node_modules", "tsx", "dist", "cli.cjs")
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+async function runCommand(args: string[]): Promise<void> {
+  const parsed = parseRunArgs(args);
+  const result = await executeAndCapture(parsed.commandArgs);
+
+  if (parsed.saveLog) {
+    console.log(`Redacted log saved: ${result.logPath}`);
+  } else {
+    cleanupRunLog(result.logDir);
+  }
+
+  if (result.exitCode === 0) {
+    console.log("Command succeeded.");
+    return;
+  }
+
+  console.log(`Command failed with exit code ${result.exitCode}.`);
+  const draft = memoryDraftFromLog(result.logPath, result.redactedLog);
+  const saved = await saveMemory(createMemory(draft), { forceNew: true });
+  console.log(`Draft memory created: ${saved.memory.title} (${saved.memory.id})`);
+  console.log(`Draft ID: ${saved.memory.id}`);
+
+  if (!parsed.noSearch) {
+    const query = draft.error_signature || draft.problem.slice(0, 160);
+    const matches = (await searchMemories(query))
+      .filter((memory) => memory.id !== saved.memory.id && !isDraftMemory(memory))
+      .slice(0, 3);
+    if (matches.length > 0) {
+      console.log("Similar memories:");
+      printMemories(matches, "");
+    }
+  }
+
+  process.exitCode = result.exitCode;
+}
+
+function parseRunArgs(args: string[]): { commandArgs: string[]; saveLog: boolean; noSearch: boolean } {
+  const separator = args.indexOf("--");
+  if (separator === -1) {
+    throw new Error("Usage: ant run [--save-log] [--no-search] -- <command>");
+  }
+
+  const flags = args.slice(0, separator);
+  const commandArgs = args.slice(separator + 1);
+  const unknown = flags.filter((flag) => !["--save-log", "--no-search"].includes(flag));
+  if (unknown.length > 0 || commandArgs.length === 0) {
+    throw new Error("Usage: ant run [--save-log] [--no-search] -- <command>");
+  }
+
+  return {
+    commandArgs,
+    saveLog: flags.includes("--save-log"),
+    noSearch: flags.includes("--no-search")
+  };
+}
+
+async function executeAndCapture(commandArgs: string[]): Promise<{
+  exitCode: number;
+  logDir: string;
+  logPath: string;
+  redactedLog: string;
+}> {
+  const logDir = fs.mkdtempSync(path.join(os.tmpdir(), "ant-run-"));
+  const logPath = path.join(logDir, "command.log");
+  let stdoutText = "";
+  let stderrText = "";
+
+  const command = commandForPlatform(commandArgs);
+  const child = spawn(command.executable, command.args, {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ["inherit", "pipe", "pipe"]
+  });
+
+  child.stdout?.on("data", (chunk) => {
+    const text = chunk.toString();
+    stdoutText += text;
+    output.write(redactText(text).text);
+  });
+  child.stderr?.on("data", (chunk) => {
+    const text = chunk.toString();
+    stderrText += text;
+    process.stderr.write(redactText(text).text);
+  });
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (typeof code === "number") {
+        resolve(code);
+      } else {
+        resolve(signal ? 1 : 0);
+      }
+    });
+  });
+
+  const redactedLog = redactText([stdoutText, stderrText].filter(Boolean).join("\n")).text;
+  fs.writeFileSync(logPath, redactedLog);
+  return { exitCode, logDir, logPath, redactedLog };
+}
+
+function commandForPlatform(commandArgs: string[]): { executable: string; args: string[] } {
+  const executable = commandArgs[0];
+  const args = commandArgs.slice(1);
+  if (process.platform !== "win32") {
+    return { executable, args };
+  }
+
+  const lower = executable.toLowerCase();
+  if (["npm", "npm.cmd", "npx", "npx.cmd", "yarn", "yarn.cmd", "pnpm", "pnpm.cmd"].includes(lower)) {
+    return { executable: "cmd.exe", args: ["/d", "/s", "/c", executable, ...args] };
+  }
+
+  return { executable, args };
+}
+
+function cleanupRunLog(logDir: string): void {
+  fs.rmSync(logDir, { recursive: true, force: true });
 }
 
 async function readMemoryInput(args: string[]): Promise<NewMemoryInput> {
@@ -569,6 +858,7 @@ Usage:
   ant ingest <log-file> --interactive
   ant drafts
   ant complete <draft_id>
+  ant run [--save-log] [--no-search] -- <command>
   ant redact <file>
   ant search <query>
   ant search --global <query>
@@ -580,6 +870,8 @@ Usage:
   ant worked <memory_id>
   ant failed <memory_id>
   ant mcp
+  ant mcp config
+  ant mcp doctor
   ant cloud`);
 }
 

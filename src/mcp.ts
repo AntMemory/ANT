@@ -10,6 +10,14 @@ import {
   searchMemoryTool
 } from "./mcpTools";
 
+export const ANT_MCP_TOOL_NAMES = [
+  "search_memory",
+  "save_memory",
+  "inspect_memories",
+  "mark_memory_worked",
+  "mark_memory_failed"
+] as const;
+
 const contextSchema = z
   .object({
     language: z.string().optional(),

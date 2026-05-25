@@ -49,6 +49,10 @@ const docs: Record<string, DocPage> = {
     description: "Expose the local alpha ANT memory store to MCP-compatible AI coding agents.",
     sections: [
       {
+        heading: "Check Setup",
+        code: "ant mcp config\nant mcp doctor"
+      },
+      {
         heading: "Run The Server",
         code: "ant mcp"
       },
@@ -59,8 +63,7 @@ const docs: Record<string, DocPage> = {
             mcpServers: {
               ant: {
                 command: "ant",
-                args: ["mcp"],
-                cwd: "/path/to/project"
+                args: ["mcp"]
               }
             }
           },
@@ -69,8 +72,29 @@ const docs: Record<string, DocPage> = {
         )
       },
       {
+        heading: "Cursor",
+        body: "Run ant mcp doctor, then paste the JSON from ant mcp config into Cursor's MCP configuration. For project-scoped setup, use .cursor/mcp.json in the project root."
+      },
+      {
+        heading: "Claude Desktop",
+        body: "Open Claude Desktop settings, use the Developer MCP configuration editor, paste the ant mcp config JSON into claude_desktop_config.json, then restart Claude Desktop."
+      },
+      {
+        heading: "Generic Client",
+        body: "Use stdio transport with command ant and args [\"mcp\"]. Set the working directory to the project where the local .ant database should live."
+      },
+      {
         heading: "Tools",
         bullets: ["search_memory", "save_memory", "inspect_memories", "mark_memory_worked", "mark_memory_failed"]
+      },
+      {
+        heading: "Troubleshooting",
+        bullets: [
+          "Run ant mcp doctor first",
+          "Run ant init if the database check fails",
+          "Use an absolute CLI path if the client cannot find ant",
+          "Run npm run test:mcp to exercise the MCP tools locally"
+        ]
       }
     ]
   },

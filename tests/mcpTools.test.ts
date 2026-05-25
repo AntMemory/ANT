@@ -3,7 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { initDatabase } from "../src/db";
+import { ANT_MCP_TOOL_NAMES } from "../src/mcp";
 import {
   inspectMemoriesTool,
   markMemoryFailedTool,
@@ -17,6 +20,33 @@ import type { NewMemoryInput } from "../src/types";
 function tempDb(): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ant-mcp-")), "memory.sqlite");
 }
+
+test("MCP tool list includes expected tools", async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-mcp-tools-"));
+  const client = new Client({ name: "ant-mcp-tools-test", version: "0.0.0" });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [
+      path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.cjs"),
+      path.join(process.cwd(), "src", "cli.ts"),
+      "mcp"
+    ],
+    cwd,
+    stderr: "pipe"
+  });
+
+  try {
+    await client.connect(transport);
+    const tools = await client.listTools();
+    const names = tools.tools.map((tool) => tool.name);
+
+    for (const expected of ANT_MCP_TOOL_NAMES) {
+      assert.ok(names.includes(expected), `${expected} should be registered`);
+    }
+  } finally {
+    await client.close();
+  }
+});
 
 test("MCP save_memory saves a memory and returns its id", async () => {
   const dbPath = tempDb();

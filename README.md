@@ -128,6 +128,16 @@ ant drafts
 ant complete <draft_id>
 ```
 
+Run a debugging command through ANT:
+
+```bash
+ant run -- npm run build
+ant run --save-log -- npm test
+ant run --no-search -- npm run typecheck
+```
+
+When the wrapped command fails, ANT creates a redacted draft memory and suggests similar local memories. Passing commands do not create drafts.
+
 Search local memories:
 
 ```bash
@@ -166,25 +176,59 @@ ant failed <memory_id>
 
 ANT includes an MCP stdio server backed by the same local SQLite database. This is an alpha integration surface.
 
-Run it:
+Print ready-to-copy configuration:
+
+```bash
+ant mcp config
+```
+
+Run a local setup check:
+
+```bash
+ant mcp doctor
+```
+
+Run the server directly:
 
 ```bash
 ant mcp
 ```
 
-Example agent configuration:
+`ant mcp doctor` checks that the CLI entrypoint is available, the local database exists or can be initialized, the MCP server starts, and the required tools are registered.
+
+Ready-to-copy configuration:
 
 ```json
 {
   "mcpServers": {
     "ant": {
       "command": "ant",
-      "args": ["mcp"],
-      "cwd": "/path/to/project"
+      "args": ["mcp"]
     }
   }
 }
 ```
+
+Cursor setup:
+
+1. Run `ant mcp doctor` in the project where ANT should store memories.
+2. Run `ant mcp config`.
+3. Paste the JSON into Cursor's MCP configuration. For a project-scoped setup, use `.cursor/mcp.json` in the project root.
+4. Reload Cursor and confirm the `ant` server is enabled.
+
+Claude Desktop setup:
+
+1. Run `ant mcp doctor`.
+2. Open Claude Desktop settings, then the Developer MCP configuration editor.
+3. Paste the JSON from `ant mcp config` into `claude_desktop_config.json`.
+4. Restart Claude Desktop.
+
+Generic MCP client setup:
+
+- Transport: stdio
+- Command: `ant`
+- Args: `["mcp"]`
+- Working directory: the project directory where `.ant/memory.sqlite` should live
 
 MCP tools:
 
@@ -195,6 +239,13 @@ MCP tools:
 - `mark_memory_failed`
 
 `search_memory` accepts a query and optional context such as language, framework, package name, package version, runtime, OS, and tool. Results include a deterministic heuristic relevance score.
+
+Troubleshooting:
+
+- If the client cannot find `ant`, install or link the CLI, or use an absolute command path to the built CLI.
+- If the database check fails, run `ant init` in the intended project directory.
+- If tools do not appear, run `ant mcp doctor` and `npm run test:mcp`.
+- MCP is local stdio only in ANT v0. It does not require or use cloud sync.
 
 ## Redaction And Privacy
 
@@ -348,7 +399,7 @@ npm run test:e2e
 - Redaction can miss unusual secret formats, business-specific identifiers, or private terms that do not match the current rules.
 - Users should inspect memories before sharing or syncing them.
 - Public-safe metadata is a local safety signal, not a formal security review.
-- Cloud sync alpha has no authentication or authorization model yet.
+- Cloud sync alpha has minimal bearer-token auth, not a production multi-user authorization model.
 - No dashboard.
 - No payments or team management.
 - No conflict resolution beyond upserting memories by id.

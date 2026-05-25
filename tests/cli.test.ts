@@ -131,6 +131,33 @@ test("invalid memory is rejected", () => {
   assert.match(result.stderr, /cause is required/);
 });
 
+test("mcp config output is valid JSON", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-mcp-config-"));
+  const result = runCli(["mcp", "config"], cwd);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    mcpServers: {
+      ant: {
+        command: "ant",
+        args: ["mcp"]
+      }
+    }
+  });
+});
+
+test("mcp doctor passes on a clean repo", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-mcp-doctor-"));
+  const result = runCli(["mcp", "doctor"], cwd);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /PASS ANT CLI available/);
+  assert.match(result.stdout, /PASS Local database ready/);
+  assert.match(result.stdout, /PASS MCP server starts/);
+  assert.match(result.stdout, /PASS Required MCP tools registered/);
+  assert.match(result.stdout, /MCP doctor passed/);
+});
+
 type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
 
 function runCli(args: string[], cwd: string, input?: string): CliResult {
