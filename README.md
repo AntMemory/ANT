@@ -10,6 +10,19 @@ AI coding agents repeatedly hit the same practical failures: framework version c
 
 ANT keeps the durable part: what broke, why it broke, how it was fixed, and how the fix was verified.
 
+## Quickstart
+
+From a fresh clone:
+
+```bash
+npm install
+npm run build
+npm run demo
+npm run test:e2e
+```
+
+That is the quickest way to see the full loop: local memory save/search, redaction, local cloud API sync, global search, and MCP smoke coverage inside the E2E run.
+
 ## How It Works
 
 - Local memories are stored in SQLite at `.ant/memory.sqlite`.
@@ -39,7 +52,33 @@ If `ant` is not linked on your machine, use:
 node dist/cli.js init
 ```
 
+Most scripts use the built local CLI under `dist/`, so `npm run demo` and `npm run test:e2e` work even before you install ANT globally.
+
+## Running The Demo
+
+```bash
+npm run demo
+```
+
+The demo is designed for showing ANT to someone else. It:
+
+1. Creates a clean temporary ANT database.
+2. Saves a sample bugfix memory.
+3. Searches it locally.
+4. Redacts a fake secret log.
+5. Starts the local cloud API.
+6. Syncs the public-safe memory.
+7. Searches it globally.
+
+No real project database is modified.
+
 ## CLI Usage
+
+Initialize a local memory database:
+
+```bash
+ant init
+```
 
 Save a memory interactively:
 
@@ -81,6 +120,16 @@ List memories that are not currently public-safe:
 
 ```bash
 ant inspect-pending
+```
+
+Cloud alpha commands:
+
+```bash
+ant cloud
+ant sync
+ant search --global "prisma generate cache"
+ant worked <memory_id>
+ant failed <memory_id>
 ```
 
 ## MCP Usage
@@ -199,15 +248,30 @@ Safety rules:
 - High-severity redaction warnings block sync.
 - Raw files and raw chat logs are never synced.
 
-## Demo
+## Quality Scoring And Ranking
 
-Run a polished local demo:
+ANT search does more than plain text matching. Local, MCP, and global search use deterministic scoring based on:
 
-```bash
-npm run demo
-```
+- text relevance to the query
+- exact or near-exact `error_signature` matches
+- context matches such as language, framework, package, version, runtime, OS, and tool
+- evidence quality
+- worked/failed reuse counts
+- a small freshness boost
 
-The demo creates a clean temp database, saves a sample bugfix memory, searches locally, redacts a fake secret log, starts the local cloud API, syncs the memory, and searches globally.
+Search results show:
+
+- memory id
+- title
+- score
+- confidence label: `low`, `medium`, or `high`
+- ranking reason
+- cause
+- solution steps
+- evidence
+- worked and failed counts
+
+Global search excludes memories where `privacy.public_safe = false`.
 
 ## Tests
 
