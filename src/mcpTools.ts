@@ -9,6 +9,7 @@ import {
   searchMemories
 } from "./db";
 import type { Memory, MemoryContext, MemoryOutcome } from "./types";
+import type { RankedMemory } from "./scoring";
 
 export type SearchMemoryInput = {
   query: string;
@@ -16,17 +17,19 @@ export type SearchMemoryInput = {
 };
 
 export type ScoredMemory = Pick<
-  Memory,
+  RankedMemory,
   "id" | "title" | "problem" | "error_signature" | "cause" | "solution" | "evidence"
 > & {
   score: number;
+  confidence: "low" | "medium" | "high";
+  ranking_reason: string;
+  worked_count: number;
+  failed_count: number;
 };
 
 export async function searchMemoryTool(args: SearchMemoryInput, dbPath?: string): Promise<{ memories: ScoredMemory[] }> {
-  const matches = await searchMemories(args.query, dbPath);
-  const memories = matches
-    .map((memory) => toScoredMemory(memory, args.query, args.context ?? {}))
-    .sort((left, right) => right.score - left.score);
+  const matches = await searchMemories(args.query, dbPath, args.context ?? {});
+  const memories = matches.map(toScoredMemory);
 
   return { memories };
 }
@@ -86,7 +89,7 @@ async function getRequiredMemory(id: string, dbPath?: string): Promise<Memory> {
   return memory;
 }
 
-function toScoredMemory(memory: Memory, query: string, context: Partial<MemoryContext>): ScoredMemory {
+function toScoredMemory(memory: RankedMemory): ScoredMemory {
   return {
     id: memory.id,
     title: memory.title,
@@ -95,32 +98,10 @@ function toScoredMemory(memory: Memory, query: string, context: Partial<MemoryCo
     cause: memory.cause,
     solution: memory.solution,
     evidence: memory.evidence,
-    score: scoreMemory(memory, query, context)
+    score: memory.score,
+    confidence: memory.confidence,
+    ranking_reason: memory.ranking_reason,
+    worked_count: memory.worked_count,
+    failed_count: memory.failed_count
   };
-}
-
-function scoreMemory(memory: Memory, query: string, context: Partial<MemoryContext>): number {
-  const queryTerms = tokenize(query);
-  const searchable = normalize(`${memory.title} ${memory.problem} ${memory.error_signature} ${memory.cause} ${JSON.stringify(memory.solution)} ${JSON.stringify(memory.evidence)}`);
-  const matchedTerms = queryTerms.filter((term) => searchable.includes(term)).length;
-  const queryScore = queryTerms.length === 0 ? 0 : matchedTerms / queryTerms.length;
-
-  const contextEntries = Object.entries(context).filter((entry): entry is [keyof MemoryContext, string] => {
-    return typeof entry[1] === "string" && entry[1].trim() !== "";
-  });
-  const matchedContext = contextEntries.filter(([key, value]) => normalize(memory.context[key]).includes(normalize(value))).length;
-  const contextScore = contextEntries.length === 0 ? 0 : matchedContext / contextEntries.length;
-
-  return Number(Math.min(1, queryScore * 0.75 + contextScore * 0.25).toFixed(3));
-}
-
-function tokenize(query: string): string[] {
-  return query
-    .split(/\s+/)
-    .map((term) => normalize(term))
-    .filter(Boolean);
-}
-
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }

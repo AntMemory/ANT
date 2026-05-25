@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
-import type { Memory, MemoryOutcome, MemoryOutcomeStatus } from "./types";
+import { rankMemories, type RankedMemory } from "./scoring";
+import type { Memory, MemoryContext, MemoryOutcome, MemoryOutcomeStatus } from "./types";
 
 const schemaSql = `
 CREATE TABLE IF NOT EXISTS memories (
@@ -96,16 +97,20 @@ export async function getMemory(id: string, dbPath = defaultDbPath()): Promise<M
   return memory;
 }
 
-export async function searchMemories(query: string, dbPath = defaultDbPath()): Promise<Memory[]> {
+export async function searchMemories(
+  query: string,
+  dbPath = defaultDbPath(),
+  context: Partial<MemoryContext> = {}
+): Promise<RankedMemory[]> {
   const SQL = await loadSql();
   const db = openExistingDatabase(SQL, dbPath);
   const rows = selectMemories(db, "SELECT * FROM memories ORDER BY updated_at DESC");
+  const memoriesWithCounts = rows.map((memory) => ({
+    ...memory,
+    ...getOutcomeCounts(db, memory.id)
+  }));
   db.close();
-  const terms = tokenize(query);
-  return rows.filter((memory) => {
-    const searchable = normalizeSearchText(memoryToSearchText(memory));
-    return terms.every((term) => searchable.includes(term));
-  });
+  return rankMemories(memoriesWithCounts, query, context);
 }
 
 export async function markMemoryOutcome(
@@ -207,6 +212,23 @@ function rowToMemoryOutcome(row: Record<string, unknown>): MemoryOutcome {
   };
 }
 
+function getOutcomeCounts(db: Database, memoryId: string): { worked_count: number; failed_count: number } {
+  const stmt = db.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'worked' THEN 1 ELSE 0 END) AS worked_count,
+      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+    FROM memory_outcomes
+    WHERE memory_id = $memory_id
+  `);
+  stmt.bind({ $memory_id: memoryId });
+  const row = stmt.step() ? stmt.getAsObject() : {};
+  stmt.free();
+  return {
+    worked_count: Number(row.worked_count ?? 0),
+    failed_count: Number(row.failed_count ?? 0)
+  };
+}
+
 async function loadSql(): Promise<SqlJsStatic> {
   return initSqlJs({
     locateFile: (file) => path.join(path.dirname(require.resolve("sql.js/dist/sql-wasm.js")), file)
@@ -232,43 +254,4 @@ function openDatabase(SQL: SqlJsStatic, dbPath: string): Database {
 function saveDatabase(db: Database, dbPath: string): void {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   fs.writeFileSync(dbPath, Buffer.from(db.export()));
-}
-
-function tokenize(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((term) => normalizeSearchText(term))
-    .filter(Boolean);
-}
-
-function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function memoryToSearchText(memory: Memory): string {
-  return [
-    memory.id,
-    memory.title,
-    memory.problem,
-    memory.error_signature,
-    memory.context.language,
-    memory.context.framework,
-    memory.context.package_name,
-    memory.context.package_version,
-    memory.context.runtime,
-    memory.context.os,
-    memory.context.tool,
-    memory.cause,
-    memory.solution.summary,
-    ...memory.solution.steps,
-    ...memory.solution.commands,
-    memory.solution.patch_example,
-    memory.evidence.verification_type,
-    ...memory.evidence.commands_run,
-    String(memory.privacy.redacted),
-    String(memory.privacy.public_safe),
-    memory.created_at,
-    memory.updated_at
-  ].join(" ");
 }

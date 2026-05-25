@@ -3,6 +3,7 @@ import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { Pool } from "pg";
 import { assertCanSync } from "./cloudSafety";
+import { rankMemories, type RankedMemory } from "./scoring";
 import type { Memory, MemoryContext } from "./types";
 
 export type CloudMemory = Memory & {
@@ -10,9 +11,7 @@ export type CloudMemory = Memory & {
   failed_count: number;
 };
 
-export type RankedCloudMemory = CloudMemory & {
-  score: number;
-};
+export type RankedCloudMemory = RankedMemory;
 
 export type CloudStore = {
   init(): Promise<void>;
@@ -249,44 +248,7 @@ function rankCloudMemories(
   query: string,
   context: Partial<MemoryContext>
 ): RankedCloudMemory[] {
-  const terms = tokenize(query);
-  return memories
-    .map((memory) => ({ ...memory, score: scoreMemory(memory, terms, context) }))
-    .filter((memory) => memory.score > 0)
-    .sort((left, right) => right.score - left.score);
-}
-
-function scoreMemory(memory: CloudMemory, terms: string[], context: Partial<MemoryContext>): number {
-  const searchable = normalize(
-    `${memory.title} ${memory.problem} ${memory.error_signature} ${memory.cause} ${JSON.stringify(memory.solution)} ${JSON.stringify(memory.evidence)}`
-  );
-  const matchedTerms = terms.filter((term) => searchable.includes(term)).length;
-  const textScore = terms.length === 0 ? 0 : matchedTerms / terms.length;
-  const reuseScore = Math.min(0.25, memory.worked_count * 0.05) - Math.min(0.3, memory.failed_count * 0.08);
-  const contextScore = scoreContext(memory, context);
-  return Number(Math.max(0, textScore * 0.7 + contextScore * 0.2 + reuseScore).toFixed(3));
-}
-
-function scoreContext(memory: CloudMemory, context: Partial<MemoryContext>): number {
-  const entries = Object.entries(context).filter((entry): entry is [keyof MemoryContext, string] => {
-    return typeof entry[1] === "string" && entry[1].trim() !== "";
-  });
-  if (entries.length === 0) {
-    return 0;
-  }
-  const matches = entries.filter(([key, value]) => normalize(memory.context[key]).includes(normalize(value))).length;
-  return matches / entries.length;
-}
-
-function tokenize(query: string): string[] {
-  return query
-    .split(/\s+/)
-    .map((term) => normalize(term))
-    .filter(Boolean);
-}
-
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return rankMemories(memories, query, context, { global: true });
 }
 
 async function loadSql(): Promise<SqlJsStatic> {

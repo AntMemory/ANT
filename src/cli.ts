@@ -11,6 +11,7 @@ import { markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory 
 import { startCloudServer } from "./cloudServer";
 import { assertCanSync } from "./cloudSafety";
 import type { RankedCloudMemory } from "./cloudStore";
+import type { RankedMemory } from "./scoring";
 import type { Memory, NewMemoryInput } from "./types";
 
 async function main(argv: string[]): Promise<void> {
@@ -325,6 +326,7 @@ function printMemories(memories: Memory[], emptyMessage: string): void {
   for (const memory of memories) {
     console.log(`Title: ${memory.title}`);
     console.log(`ID: ${memory.id}`);
+    printRanking(memory);
     if (memory.error_signature) {
       console.log(`Error signature: ${memory.error_signature}`);
     }
@@ -355,9 +357,7 @@ function printGlobalMemories(memories: RankedCloudMemory[], emptyMessage: string
   for (const memory of memories) {
     console.log(`Title: ${memory.title}`);
     console.log(`ID: ${memory.id}`);
-    console.log(`Score: ${memory.score}`);
-    console.log(`Worked: ${memory.worked_count}`);
-    console.log(`Failed: ${memory.failed_count}`);
+    printRanking(memory);
     if (memory.error_signature) {
       console.log(`Error signature: ${memory.error_signature}`);
     }
@@ -369,6 +369,28 @@ function printGlobalMemories(memories: RankedCloudMemory[], emptyMessage: string
     console.log(`Evidence: ${formatEvidence(memory)}`);
     console.log("");
   }
+}
+
+function printRanking(memory: Memory): void {
+  if (!isRankedMemory(memory)) {
+    return;
+  }
+
+  console.log(`Score: ${memory.score}`);
+  console.log(`Confidence: ${memory.confidence}`);
+  console.log(`Ranking reason: ${memory.ranking_reason}`);
+  console.log(`Worked: ${memory.worked_count}`);
+  console.log(`Failed: ${memory.failed_count}`);
+}
+
+function isRankedMemory(memory: Memory): memory is RankedMemory {
+  return (
+    "score" in memory &&
+    "confidence" in memory &&
+    "ranking_reason" in memory &&
+    "worked_count" in memory &&
+    "failed_count" in memory
+  );
 }
 
 function formatEvidence(memory: Memory): string {
