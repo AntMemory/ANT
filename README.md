@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AntMemory/ANT/actions/workflows/ci.yml/badge.svg)](https://github.com/AntMemory/ANT/actions/workflows/ci.yml)
 
-ANT is a local-first memory tool for AI coding agents. It stores solved coding issues as structured memories so future agents can search for prior fixes instead of rediscovering them from scratch.
+ANT is alpha local-first memory software for AI coding agents. It stores solved coding issues as structured memories so future agents can search for prior fixes instead of rediscovering them from scratch.
 
 ANT is not a chat-log archive. A memory is a small, explicit bugfix record: problem, error signature, context, cause, solution, evidence, and privacy metadata.
 
@@ -10,14 +10,14 @@ ANT is not a chat-log archive. A memory is a small, explicit bugfix record: prob
 
 AI coding agents repeatedly hit the same practical failures: framework version changes, package quirks, build errors, environment traps, and subtle fix patterns. Those fixes are usually lost in terminal output or chat history.
 
-ANT keeps the durable part: what broke, why it broke, how it was fixed, and how the fix was verified.
+ANT keeps the durable part: what broke, why it broke, how it was fixed, and how the fix was verified. Users should inspect memories before sharing them outside a local machine.
 
 ## Quickstart
 
 From a fresh clone:
 
 ```bash
-npm install
+npm ci
 npm run build
 npm run demo
 npm run test:e2e
@@ -32,14 +32,14 @@ That is the quickest way to see the full loop: local memory save/search, redacti
 - `ant search` searches local memories.
 - `ant mcp` exposes the same local store to MCP-compatible agents.
 - Redaction runs locally before memories are saved.
-- Cloud sync alpha can upload only redacted, public-safe memories to a shared API.
+- Cloud sync alpha can upload only redacted, public-safe memories to a shared API. Inspect memories before syncing.
 
 ## Install And Setup
 
 From source:
 
 ```bash
-npm install
+npm ci
 npm run build
 ant init
 ```
@@ -164,7 +164,7 @@ ant failed <memory_id>
 
 ## MCP Usage
 
-ANT includes an MCP stdio server backed by the same local SQLite database.
+ANT includes an MCP stdio server backed by the same local SQLite database. This is an alpha integration surface.
 
 Run it:
 
@@ -194,7 +194,7 @@ MCP tools:
 - `mark_memory_worked`
 - `mark_memory_failed`
 
-`search_memory` accepts a query and optional context such as language, framework, package name, package version, runtime, OS, and tool. Results include a relevance score.
+`search_memory` accepts a query and optional context such as language, framework, package name, package version, runtime, OS, and tool. Results include a deterministic heuristic relevance score.
 
 ## Redaction And Privacy
 
@@ -247,7 +247,7 @@ Cloud sync refuses memories that are not public-safe and also blocks memories ca
 
 ## Cloud Sync Alpha
 
-Cloud sync is an alpha feature for sharing redacted, public-safe memories across machines.
+Cloud sync is an alpha feature for sharing redacted, public-safe memories across machines. It is not production collaboration infrastructure and has no dashboard, team management, billing, or authentication yet.
 
 Start the local API:
 
@@ -315,6 +315,8 @@ Search results show:
 
 Global search excludes memories where `privacy.public_safe = false`.
 
+Search and ranking are deterministic heuristics, not ML ranking or semantic search. Scores should be treated as a sorting aid, not a correctness guarantee.
+
 ## Tests
 
 ```bash
@@ -325,8 +327,10 @@ npm run test:e2e
 
 ## Current Limitations
 
+- ANT is alpha software and APIs, storage, and CLI output may change.
 - Redaction is deterministic and conservative, not semantic.
 - Redaction can miss unusual secret formats, business-specific identifiers, or private terms that do not match the current rules.
+- Users should inspect memories before sharing or syncing them.
 - Public-safe metadata is a local safety signal, not a formal security review.
 - Cloud sync alpha has no authentication or authorization model yet.
 - No dashboard.

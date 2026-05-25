@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const githubUrl = "https://github.com/ant-memory-ai/ant";
+const githubUrl = "https://github.com/AntMemory/ANT";
 
 type DocPage = {
   title: string;
@@ -18,11 +18,11 @@ type DocPage = {
 const docs: Record<string, DocPage> = {
   "/docs/quickstart": {
     title: "Quickstart",
-    description: "Clone the repo, build ANT, run the demo, and verify the E2E flow.",
+    description: "Clone the repo, install locked dependencies, build ANT, run the demo, and verify the E2E flow.",
     sections: [
       {
         heading: "Install",
-        code: "npm install\nnpm run build"
+        code: "npm ci\nnpm run build\nnpm run demo\nnpm run test:e2e"
       },
       {
         heading: "Run The Demo",
@@ -46,7 +46,7 @@ const docs: Record<string, DocPage> = {
   },
   "/docs/mcp": {
     title: "MCP Setup",
-    description: "Expose the local ANT memory store to MCP-compatible AI coding agents.",
+    description: "Expose the local alpha ANT memory store to MCP-compatible AI coding agents.",
     sections: [
       {
         heading: "Run The Server",
@@ -76,7 +76,7 @@ const docs: Record<string, DocPage> = {
   },
   "/docs/privacy": {
     title: "Privacy And Redaction",
-    description: "ANT redacts locally before saving and before any cloud sync eligibility.",
+    description: "ANT uses deterministic local redaction before saving and before any cloud sync eligibility. Users should inspect memories before sharing.",
     sections: [
       {
         heading: "Preview Redaction",
@@ -94,12 +94,16 @@ const docs: Record<string, DocPage> = {
         heading: "Pending Review",
         body: "Memories with privacy.public_safe = false stay local and appear in the pending list.",
         code: "ant inspect-pending"
+      },
+      {
+        heading: "Limitations",
+        body: "Redaction is regex and entropy based. It can miss unusual secret formats or project-specific private terms."
       }
     ]
   },
   "/docs/cloud": {
     title: "Cloud Sync Alpha",
-    description: "Sync redacted, public-safe memories to a shared API for search from other machines.",
+    description: "Alpha sync for redacted, public-safe memories. It is not production team infrastructure.",
     sections: [
       {
         heading: "Start The Local API",
@@ -114,7 +118,8 @@ const docs: Record<string, DocPage> = {
         bullets: [
           "Only public-safe memories sync",
           "High-severity redaction warnings block sync",
-          "Raw files and raw chat logs are never synced"
+          "Raw files and raw chat logs are never synced",
+          "Inspect memories before sharing"
         ]
       }
     ]
@@ -137,9 +142,9 @@ function LandingPage() {
       <main>
         <section className="hero" id="top">
           <div className="heroCopy">
-            <p className="eyebrow">Local-first memory for coding agents</p>
+            <p className="eyebrow">Alpha local-first memory for coding agents</p>
             <h1>Every bug should only be solved once.</h1>
-            <p className="subtitle">ANT is collective memory for AI coding agents.</p>
+            <p className="subtitle">ANT stores structured bugfix memories for AI coding agents.</p>
             <div className="ctaRow">
               <a className="button primary" href={githubUrl}>
                 GitHub
@@ -179,7 +184,7 @@ function LandingPage() {
         <Section
           id="privacy"
           title="Privacy"
-          body="Redaction runs locally before memories are saved. Public sync only accepts memories marked public-safe and without high-severity warnings."
+          body="Deterministic redaction runs locally before memories are saved. It is not perfect, and users should inspect memories before syncing."
         />
         <Section
           id="mcp"
@@ -189,12 +194,17 @@ function LandingPage() {
         <Section
           id="cloud"
           title="Cloud Sync Alpha"
-          body="The alpha API syncs redacted, public-safe memories so another machine can search prior fixes. No dashboard, auth, payments, or team features yet."
+          body="The alpha API syncs redacted, public-safe memories so another machine can search prior fixes. No production dashboard, auth, billing, or team features yet."
         />
         <Section
           id="quality"
           title="Quality Scoring"
-          body="Search ranks by text match, error-signature match, context, evidence quality, worked/failed counts, and freshness. Results explain why they ranked."
+          body="Search uses deterministic heuristics: text match, error-signature match, context, evidence quality, worked/failed counts, and freshness. It is not ML or semantic magic."
+        />
+        <Section
+          id="limitations"
+          title="Known Limitations"
+          body="ANT is alpha software. Redaction can miss secrets, cloud sync is experimental, and production dashboard, team, and billing features do not exist yet."
         />
       </main>
       <SiteFooter />
