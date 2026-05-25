@@ -16,16 +16,25 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:e2e": "tsx scripts/e2e.ts",
     "test:mcp": "npm run build && node --import tsx scripts/mcp-smoke.ts",
-    "start": "tsx src/cli.ts"
+    "start": "tsx src/cli.ts",
+    "website:build": "vite build --config website/vite.config.ts",
+    "website:dev": "vite --config website/vite.config.ts",
+    "website:preview": "vite preview --config website/vite.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "pg": "^8.21.0",
-    "sql.js": "^1.10.3"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "sql.js": "^1.10.3",
+    "vite": "^8.0.14"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
     "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3"
   },
