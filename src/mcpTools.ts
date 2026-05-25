@@ -1,4 +1,4 @@
-import { createMemory } from "./schema";
+import { createMemory, validateNewMemory } from "./schema";
 import { memoryFromJson } from "./input";
 import {
   getMemory,
@@ -35,7 +35,9 @@ export async function searchMemoryTool(args: SearchMemoryInput, dbPath?: string)
 }
 
 export async function saveMemoryTool(args: { memory: unknown }, dbPath?: string): Promise<{ id: string }> {
-  const memory = createMemory(memoryFromJson(args.memory));
+  const input = memoryFromJson(args.memory);
+  validateNewMemory(input);
+  const memory = createMemory(input);
   const result = await saveMemory(memory, { dbPath });
   return { id: result.memory.id };
 }
