@@ -36,6 +36,11 @@ const docs: Record<string, DocPage> = {
       {
         heading: "Use The CLI",
         code: "ant init\nant remember --json examples/memories/nextjs-15-params.json\nant search \"nextjs params promise\""
+      },
+      {
+        heading: "Ingest Logs",
+        code:
+          "ant ingest examples/logs/npm-nextjs.log\nant ingest examples/logs/python-django.log\nant ingest examples/logs/docker-build.log\nant drafts\nant complete <draft_id>"
       }
     ]
   },

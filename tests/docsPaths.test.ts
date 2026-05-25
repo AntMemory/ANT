@@ -16,12 +16,20 @@ const ignored = new Set([
   "secret.log"
 ]);
 
+const requiredDocumentedPaths = [
+  "examples/logs/npm-nextjs.log",
+  "examples/logs/python-django.log",
+  "examples/logs/docker-build.log"
+];
+
 test("documented example file paths exist", () => {
   const missing: string[] = [];
+  const documented = new Set<string>();
 
   for (const file of docsFiles) {
     const content = fs.readFileSync(path.join(repoRoot, file), "utf8");
     for (const examplePath of documentedPaths(content)) {
+      documented.add(examplePath);
       if (ignored.has(examplePath)) {
         continue;
       }
@@ -33,6 +41,9 @@ test("documented example file paths exist", () => {
   }
 
   assert.deepEqual(missing, []);
+  for (const requiredPath of requiredDocumentedPaths) {
+    assert.equal(documented.has(requiredPath), true, `${requiredPath} must be documented`);
+  }
 });
 
 function documentedPaths(content: string): string[] {
