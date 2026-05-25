@@ -57,14 +57,28 @@ export function redactMemory(input: NewMemoryInput, cwd = process.cwd()): NewMem
 
   const redacted: NewMemoryInput = {
     ...input,
+    title: redactField(input.title),
     problem: redactField(input.problem),
     error_signature: redactField(input.error_signature),
+    context: {
+      language: redactField(input.context.language),
+      framework: redactField(input.context.framework),
+      package_name: redactField(input.context.package_name),
+      package_version: redactField(input.context.package_version),
+      runtime: redactField(input.context.runtime),
+      os: redactField(input.context.os),
+      tool: redactField(input.context.tool)
+    },
     cause: redactField(input.cause),
     solution: {
       summary: redactField(input.solution.summary),
       steps: input.solution.steps.map(redactField),
       commands: input.solution.commands.map(redactField),
       patch_example: redactField(input.solution.patch_example)
+    },
+    evidence: {
+      verification_type: redactField(input.evidence.verification_type),
+      commands_run: input.evidence.commands_run.map(redactField)
     },
     privacy: {
       redacted: true,
@@ -84,6 +98,21 @@ function rules(cwd: string): Rule[] {
   const projectName = path.basename(cwd);
   const projectPattern = safeLiteralPattern(projectName);
   const userPattern = safeLiteralPattern(userName);
+  const optionalRules: Rule[] = [];
+  if (userPattern) {
+    optionalRules.push({
+      label: "username redacted",
+      pattern: new RegExp(`\\b${userPattern}\\b`, "gi"),
+      replacement: "[REDACTED_USER]"
+    });
+  }
+  if (projectPattern && projectName.length > 3) {
+    optionalRules.push({
+      label: "project name redacted",
+      pattern: new RegExp(`\\b${projectPattern}\\b`, "gi"),
+      replacement: "[REDACTED_PROJECT]"
+    });
+  }
 
   return [
     {
@@ -122,19 +151,7 @@ function rules(cwd: string): Rule[] {
       pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
       replacement: "[REDACTED_EMAIL]"
     },
-    {
-      label: "username redacted",
-      pattern: userPattern ? new RegExp(`\\b${userPattern}\\b`, "gi") : /$^/,
-      replacement: "[REDACTED_USER]"
-    },
-    {
-      label: "project name redacted",
-      pattern:
-        projectPattern && projectName.length > 3
-          ? new RegExp(`\\b${projectPattern}\\b`, "gi")
-          : /$^/,
-      replacement: "[REDACTED_PROJECT]"
-    }
+    ...optionalRules
   ];
 }
 

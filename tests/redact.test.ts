@@ -91,6 +91,25 @@ test("createMemory redacts sensitive memory fields before storage", async () => 
   assert.ok(stored.privacy.redaction_warnings.length > 0);
 });
 
+test("createMemory redacts secrets across every memory field", () => {
+  const memory = createMemory(secretInEveryMemoryField());
+  const serialized = JSON.stringify(memory);
+
+  for (const secret of everyFieldSecrets()) {
+    assert.doesNotMatch(serialized, new RegExp(escapeRegExp(secret)), `Leaked secret: ${secret}`);
+  }
+
+  assert.equal(memory.title.includes("[REDACTED_API_KEY]"), true);
+  assert.equal(memory.context.language, "[REDACTED_EMAIL]");
+  assert.equal(memory.privacy.redacted, true);
+  assert.equal(memory.privacy.public_safe, false);
+  assert.ok(memory.privacy.redaction_warnings.includes("API key redacted"));
+  assert.ok(memory.privacy.redaction_warnings.includes("database URL redacted"));
+  assert.ok(memory.privacy.redaction_warnings.includes("email redacted"));
+  assert.ok(memory.privacy.redaction_warnings.includes("token redacted"));
+  assert.ok(memory.privacy.redaction_warnings.includes("password redacted"));
+});
+
 test("ant redact prints redacted file content and warnings", () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-redact-cli-"));
   const filePath = path.join(cwd, "error.log");
@@ -150,6 +169,81 @@ function secretMemory(): NewMemoryInput {
       redaction_warnings: []
     }
   };
+}
+
+function secretInEveryMemoryField(): NewMemoryInput {
+  const [
+    titleKey,
+    problemEmail,
+    errorPassword,
+    contextEmail,
+    contextToken,
+    contextDb,
+    contextPassword,
+    contextKey,
+    contextEnv,
+    contextBearer,
+    causeDb,
+    summaryToken,
+    stepKey,
+    commandPassword,
+    patchPrivateKey,
+    evidenceEmail,
+    evidenceEnv
+  ] = everyFieldSecrets();
+
+  return {
+    title: `Build failed with ${titleKey}`,
+    problem: `Problem reported by ${problemEmail}`,
+    error_signature: `Error contained password=${errorPassword}`,
+    context: {
+      language: contextEmail,
+      framework: `token=${contextToken}`,
+      package_name: contextDb,
+      package_version: `password=${contextPassword}`,
+      runtime: contextKey,
+      os: `NPM_TOKEN=${contextEnv}`,
+      tool: `bearer=${contextBearer}`
+    },
+    cause: `Cause used ${causeDb}`,
+    solution: {
+      summary: `Rotate token=${summaryToken}`,
+      steps: [`Remove ${stepKey}`],
+      commands: [`PASSWORD=${commandPassword} npm test`],
+      patch_example: patchPrivateKey
+    },
+    evidence: {
+      verification_type: `checked by ${evidenceEmail}`,
+      commands_run: [`API_KEY=${evidenceEnv} npm run build`]
+    },
+    privacy: {
+      redacted: false,
+      public_safe: true,
+      redaction_warnings: []
+    }
+  };
+}
+
+function everyFieldSecrets(): string[] {
+  return [
+    "sk-title1234567890abcdefABCDEF123456",
+    "problem@example.com",
+    "field-password-secret",
+    "context-language@example.com",
+    "ctxTOKEN1234567890abcdefABCDEF",
+    "postgres://ctx:secret@localhost:5432/app",
+    "ctx-password-secret",
+    "sk-runtime1234567890abcdefABCDEF123456",
+    "envSECRET1234567890abcdefABCDEF",
+    "bearerSECRET1234567890abcdefABCDEF",
+    "mysql://cause:secret@localhost:3306/app",
+    "summaryTOKEN1234567890abcdefABCDEF",
+    "ghp_step1234567890abcdefABCDEF123456",
+    "command-password-secret",
+    "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----",
+    "evidence@example.com",
+    "evidenceSECRET1234567890abcdefABCDEF"
+  ];
 }
 
 function runCli(args: string[], cwd: string): ReturnType<typeof spawnSync> {

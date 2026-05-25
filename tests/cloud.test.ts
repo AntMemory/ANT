@@ -56,6 +56,22 @@ test("unsafe memory is rejected", async () => {
   assert.match(response.body.error, /not public-safe|high-severity/);
 });
 
+test("high-severity redaction warnings block public sync", async () => {
+  const memory = {
+    ...createMemory(safeMemory("High warning memory")),
+    privacy: {
+      redacted: true,
+      public_safe: true,
+      redaction_warnings: ["API key redacted"]
+    }
+  };
+
+  const response = await postJson("/memories", memory);
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /not public-safe|high-severity/);
+});
+
 test("global search returns synced memory", async () => {
   const memory = createMemory(safeMemory("Next.js params cloud memory"));
   await postJson("/memories", memory);

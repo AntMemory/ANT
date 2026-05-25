@@ -183,15 +183,25 @@ MCP tools:
 
 ANT runs deterministic local redaction before saving sensitive memory fields:
 
+- `title`
 - `problem`
 - `error_signature`
+- `context.language`
+- `context.framework`
+- `context.package_name`
+- `context.package_version`
+- `context.runtime`
+- `context.os`
+- `context.tool`
 - `cause`
 - `solution.summary`
 - `solution.steps`
 - `solution.commands`
 - `solution.patch_example`
+- `evidence.verification_type`
+- `evidence.commands_run`
 
-The redactor uses regex and simple entropy checks. It does not use an LLM.
+The redactor uses regex and simple entropy checks. It does not use an LLM, and it cannot guarantee that every private identifier or novel secret format will be caught.
 
 Current checks cover:
 
@@ -215,6 +225,8 @@ privacy: {
 ```
 
 `ant inspect-pending` shows memories where `public_safe` is false.
+
+Cloud sync refuses memories that are not public-safe and also blocks memories carrying high-severity redaction warnings such as API keys, tokens, passwords, private keys, `.env` values, database URLs, or high-entropy secrets.
 
 ## Cloud Sync Alpha
 
@@ -297,6 +309,8 @@ npm run test:e2e
 ## Current Limitations
 
 - Redaction is deterministic and conservative, not semantic.
+- Redaction can miss unusual secret formats, business-specific identifiers, or private terms that do not match the current rules.
+- Public-safe metadata is a local safety signal, not a formal security review.
 - Cloud sync alpha has no authentication or authorization model yet.
 - No dashboard.
 - No payments or team management.
