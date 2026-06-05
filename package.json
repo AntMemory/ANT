@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "check": "npm test && npm run build && npm run typecheck && npm run test:e2e && npm run test:mcp && npm run demo && npm run website:build && npm run verify:pack",
     "cloud": "node dist/cloud.js",
     "demo": "tsx scripts/demo.ts",
     "dev:api": "tsx src/cloud.ts",

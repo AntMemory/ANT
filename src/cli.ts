@@ -22,7 +22,7 @@ import {
   searchMemories,
   updateMemory
 } from "./db";
-import { markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory } from "./cloudClient";
+import { cloudUrl, markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory } from "./cloudClient";
 import { startCloudServer } from "./cloudServer";
 import { assertCanSync } from "./cloudSafety";
 import type { RankedCloudMemory } from "./cloudStore";
@@ -37,6 +37,11 @@ async function main(argv: string[]): Promise<void> {
       const dbPath = defaultDbPath();
       await initDatabase(dbPath);
       console.log(`ANT database ready: ${dbPath}`);
+      return;
+    }
+
+    if (command === "doctor") {
+      await runDoctor();
       return;
     }
 
@@ -249,6 +254,78 @@ async function syncMemories(): Promise<void> {
   if (failed > 0) {
     process.exitCode = 1;
   }
+}
+
+async function runDoctor(): Promise<void> {
+  const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
+
+  checks.push({
+    label: "Node runtime",
+    ok: isNodeVersionAtLeast(20),
+    detail: `Node ${process.versions.node}`
+  });
+
+  const cliEntry = process.argv[1];
+  checks.push({
+    label: "ANT CLI entrypoint",
+    ok: Boolean(cliEntry && fs.existsSync(cliEntry)),
+    detail: cliEntry && fs.existsSync(cliEntry) ? cliEntry : "Current CLI entrypoint was not found"
+  });
+
+  const dbPath = defaultDbPath();
+  try {
+    await initDatabase(dbPath);
+    checks.push({
+      label: "Local SQLite database",
+      ok: true,
+      detail: dbPath
+    });
+  } catch (error) {
+    checks.push({
+      label: "Local SQLite database",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error)
+    });
+  }
+
+  const redaction = redactText("OPENAI_API_KEY=sk-test1234567890abcdefABCDEF123456");
+  checks.push({
+    label: "Redaction smoke test",
+    ok: !redaction.text.includes("sk-test1234567890abcdefABCDEF123456") && redaction.warnings.length > 0,
+    detail: redaction.warnings.length > 0 ? redaction.warnings.join("; ") : "Fake API key was not redacted"
+  });
+
+  try {
+    const toolNames = await withTimeout(listMcpToolsFromServer(), 10_000, "MCP server startup timed out");
+    const missing = ANT_MCP_TOOL_NAMES.filter((name) => !toolNames.includes(name));
+    checks.push({
+      label: "MCP tool surface",
+      ok: missing.length === 0,
+      detail: missing.length === 0 ? toolNames.join(", ") : `Missing: ${missing.join(", ")}`
+    });
+  } catch (error) {
+    checks.push({
+      label: "MCP tool surface",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error)
+    });
+  }
+
+  console.log("ANT doctor");
+  for (const check of checks) {
+    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.label}: ${check.detail}`);
+  }
+  console.log(`INFO Cloud API URL: ${cloudUrl()}`);
+
+  if (checks.some((check) => !check.ok)) {
+    throw new Error("ANT doctor failed.");
+  }
+
+  console.log("ANT doctor passed.");
+}
+
+function isNodeVersionAtLeast(major: number): boolean {
+  return Number(process.versions.node.split(".")[0]) >= major;
 }
 
 function printMcpConfig(): void {
@@ -866,6 +943,7 @@ function printHelp(): void {
 
 Usage:
   ant init
+  ant doctor
   ant remember
   ant remember --json memory.json
   ant remember --from-file error.log

@@ -57,6 +57,21 @@ test("init creates database", () => {
   assert.equal(fs.existsSync(path.join(cwd, ".ant", "memory.sqlite")), true);
 });
 
+test("doctor passes on a clean repo", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-doctor-"));
+  const result = runCli(["doctor"], cwd);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ANT doctor/);
+  assert.match(result.stdout, /PASS Node runtime/);
+  assert.match(result.stdout, /PASS ANT CLI entrypoint/);
+  assert.match(result.stdout, /PASS Local SQLite database/);
+  assert.match(result.stdout, /PASS Redaction smoke test/);
+  assert.match(result.stdout, /PASS MCP tool surface/);
+  assert.match(result.stdout, /INFO Cloud API URL:/);
+  assert.match(result.stdout, /ANT doctor passed/);
+});
+
 test("remember saves memory from JSON", () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-json-"));
   const memoryPath = path.join(cwd, "memory.json");

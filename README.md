@@ -23,6 +23,18 @@ npm run demo
 npm run test:e2e
 ```
 
+For a one-command local confidence sweep:
+
+```bash
+npm run check
+```
+
+For a quick local health check:
+
+```bash
+node dist/cli.js doctor
+```
+
 That is the quickest way to see the full loop: local memory save/search, redaction, local cloud API sync, global search, and MCP smoke coverage inside the E2E run.
 
 ## How It Works
@@ -41,6 +53,7 @@ From source:
 ```bash
 npm ci
 npm run build
+node dist/cli.js doctor
 ant init
 ```
 
@@ -48,12 +61,14 @@ For development:
 
 ```bash
 npm start -- init
+npm start -- doctor
 ```
 
 If `ant` is not linked on your machine, use:
 
 ```bash
 node dist/cli.js init
+node dist/cli.js doctor
 ```
 
 Most scripts use the built local CLI under `dist/`, so `npm run demo` and `npm run test:e2e` work even before you install ANT globally.
@@ -61,8 +76,7 @@ Most scripts use the built local CLI under `dist/`, so `npm run demo` and `npm r
 Package alpha checks:
 
 ```bash
-npm run typecheck
-npm run verify:pack
+npm run check
 ```
 
 The npm package is intended to contain the built `dist/` CLI files plus project docs such as `README.md` and `LICENSE`. Tests, scripts, temporary databases, logs, and website source are not part of the published package.
@@ -71,6 +85,7 @@ If installed from an alpha npm package, the CLI entrypoint is:
 
 ```bash
 ant init
+ant doctor
 ```
 
 ## Running The Demo
@@ -97,6 +112,12 @@ Initialize a local memory database:
 
 ```bash
 ant init
+```
+
+Check local setup:
+
+```bash
+ant doctor
 ```
 
 Save a memory interactively:

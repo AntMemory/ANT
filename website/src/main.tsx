@@ -57,6 +57,29 @@ const workflow = [
   }
 ];
 
+const quickstartCards = [
+  {
+    label: "Clone",
+    title: "Install and build",
+    command: "npm ci\nnpm run build"
+  },
+  {
+    label: "Demo",
+    title: "See the full loop",
+    command: "npm run demo"
+  },
+  {
+    label: "Doctor",
+    title: "Check local setup",
+    command: "node dist/cli.js doctor"
+  },
+  {
+    label: "Ship",
+    title: "Run confidence checks",
+    command: "npm run check"
+  }
+];
+
 const trustItems = [
   {
     title: "Local by default",
@@ -133,6 +156,16 @@ const docs: Record<string, DocPage> = {
         code: "npm ci\nnpm run build\nnpm run demo\nnpm run test:e2e"
       },
       {
+        heading: "Health check",
+        body: "Use doctor when setup feels uncertain. It checks the local database, redaction, MCP tool registration, runtime, and cloud API configuration.",
+        code: "node dist/cli.js doctor\nant doctor"
+      },
+      {
+        heading: "Full confidence sweep",
+        body: "For a local release-style pass, run the check script. It executes tests, builds, E2E, MCP smoke, demo, website build, and package verification.",
+        code: "npm run check"
+      },
+      {
         heading: "Demo",
         body:
           "The demo uses temporary databases, starts the local cloud API, saves a memory, redacts a fake secret log, syncs, and searches globally.",
@@ -141,7 +174,7 @@ const docs: Record<string, DocPage> = {
       {
         heading: "Local memory loop",
         code:
-          "ant init\nant remember --json examples/memories/nextjs-15-params.json\nant search \"nextjs params promise\"\nant inspect"
+          "ant init\nant doctor\nant remember --json examples/memories/nextjs-15-params.json\nant search \"nextjs params promise\"\nant inspect"
       },
       {
         heading: "Ingest logs",
@@ -355,6 +388,27 @@ function LandingPage() {
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
               </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="quickstartBand" id="quickstart" aria-label="ANT quickstart">
+          <div className="sectionIntro">
+            <p className="eyebrow">Quickstart</p>
+            <h2>From clone to confidence in four commands.</h2>
+            <p>
+              The fast path is intentionally boring: install dependencies, build the CLI, run the demo, then ask ANT to
+              check its own local setup.
+            </p>
+          </div>
+          <div className="quickstartGrid">
+            {quickstartCards.map((item, index) => (
+              <article className="quickstartCard" key={item.title}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <p>{item.label}</p>
+                <h3>{item.title}</h3>
+                <CodeBlock code={item.command} />
+              </article>
             ))}
           </div>
         </section>
