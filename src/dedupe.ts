@@ -44,8 +44,9 @@ export function findDuplicate(memory: Memory, existing: Memory[]): DedupeCandida
 export function findDuplicates(memories: Memory[]): DedupeCandidate[] {
   const candidates: DedupeCandidate[] = [];
   const canonical: Memory[] = [];
+  const ordered = [...memories].sort(compareByCreatedAt);
 
-  for (const memory of memories) {
+  for (const memory of ordered) {
     const duplicate = findDuplicate(memory, canonical);
     if (duplicate) {
       candidates.push(duplicate);
@@ -55,6 +56,16 @@ export function findDuplicates(memories: Memory[]): DedupeCandidate[] {
   }
 
   return candidates;
+}
+
+function compareByCreatedAt(left: Memory, right: Memory): number {
+  const leftTime = Date.parse(left.created_at);
+  const rightTime = Date.parse(right.created_at);
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+
+  return left.id.localeCompare(right.id);
 }
 
 export function mergeMemories(canonical: Memory, duplicate: Memory): Memory {

@@ -224,20 +224,31 @@ async function syncMemories(): Promise<void> {
   const memories = await listMemories();
   let synced = 0;
   let skipped = 0;
+  let failed = 0;
 
   for (const memory of memories) {
     try {
       assertCanSync(memory);
+    } catch (error) {
+      skipped += 1;
+      console.error(`Skipped ${memory.id}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+
+    try {
       await uploadMemory(memory);
       synced += 1;
       console.log(`Synced: ${memory.title} (${memory.id})`);
     } catch (error) {
-      skipped += 1;
-      console.error(`Skipped ${memory.id}: ${error instanceof Error ? error.message : String(error)}`);
+      failed += 1;
+      console.error(`Failed ${memory.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  console.log(`Sync complete. synced=${synced} skipped=${skipped}`);
+  console.log(`Sync complete. synced=${synced} skipped=${skipped} failed=${failed}`);
+  if (failed > 0) {
+    process.exitCode = 1;
+  }
 }
 
 function printMcpConfig(): void {
@@ -508,7 +519,7 @@ function cleanupRunLog(logDir: string): void {
 async function readMemoryInput(args: string[]): Promise<NewMemoryInput> {
   const jsonPath = getFlagValue(args, "--json");
   if (jsonPath) {
-    return memoryFromJson(JSON.parse(fs.readFileSync(jsonPath, "utf8")));
+    return memoryFromJson(JSON.parse(stripBom(fs.readFileSync(jsonPath, "utf8"))));
   }
 
   const filePath = getFlagValue(args, "--from-file");
@@ -536,6 +547,10 @@ function getFlagValue(args: string[], flag: string): string | undefined {
   }
 
   return value;
+}
+
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 async function promptForMemory(): Promise<NewMemoryInput> {

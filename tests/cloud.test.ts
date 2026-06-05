@@ -194,6 +194,15 @@ test("malformed JSON returns 400", async () => {
   assert.match(response.body.error, /Malformed JSON/);
 });
 
+test("BOM-prefixed JSON body is accepted", async () => {
+  const response = await rawRequest("POST", "/memories", `\uFEFF${JSON.stringify(createMemory(safeMemory("BOM cloud memory")))}`, {
+    "content-type": "application/json"
+  });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.memory.title, "BOM cloud memory");
+});
+
 test("unsupported methods return 405", async () => {
   const response = await rawRequest("GET", "/memories");
 

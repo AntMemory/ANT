@@ -129,10 +129,14 @@ async function readJson(req: IncomingMessage, limitBytes: number): Promise<unkno
   }
   const raw = Buffer.concat(chunks).toString("utf8");
   try {
-    return raw ? JSON.parse(raw) : {};
+    return raw ? JSON.parse(stripBom(raw)) : {};
   } catch {
     throw new HttpError(400, "Malformed JSON body.");
   }
+}
+
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 function parseContext(raw: string | null): Record<string, string> {

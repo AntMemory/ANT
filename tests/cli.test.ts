@@ -69,6 +69,18 @@ test("remember saves memory from JSON", () => {
   assert.match(result.stdout, /Remembered: JSON import test error/);
 });
 
+test("remember accepts UTF-8 BOM memory JSON", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-json-bom-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  fs.writeFileSync(memoryPath, `\uFEFF${JSON.stringify(validMemory("BOM JSON import test error"), null, 2)}`);
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  const result = runCli(["remember", "--json", memoryPath], cwd);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Remembered: BOM JSON import test error/);
+});
+
 test("remember saves memory from error log", () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-log-"));
   const logPath = path.join(cwd, "error.log");
@@ -131,6 +143,20 @@ test("invalid memory is rejected", () => {
   assert.match(result.stderr, /cause is required/);
 });
 
+test("sync exits nonzero when cloud upload fails", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-sync-fail-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  fs.writeFileSync(memoryPath, JSON.stringify(validMemory("Sync unavailable memory"), null, 2));
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  assert.equal(runCli(["remember", "--json", memoryPath], cwd).status, 0);
+  const result = runCli(["sync"], cwd, undefined, { ANT_CLOUD_URL: "http://127.0.0.1:59999" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Failed [0-9a-f-]+:/);
+  assert.match(result.stdout, /failed=1/);
+});
+
 test("mcp config output is valid JSON", () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-mcp-config-"));
   const result = runCli(["mcp", "config"], cwd);
@@ -160,11 +186,12 @@ test("mcp doctor passes on a clean repo", () => {
 
 type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
 
-function runCli(args: string[], cwd: string, input?: string): CliResult {
+function runCli(args: string[], cwd: string, input?: string, env: NodeJS.ProcessEnv = {}): CliResult {
   return spawnSync(process.execPath, [tsxPath, cliPath, ...args], {
     cwd,
     input,
-    encoding: "utf8"
+    encoding: "utf8",
+    env: { ...process.env, ...env }
   }) as CliResult;
 }
 

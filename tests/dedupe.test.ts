@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { initDatabase, listMemories, saveMemory } from "../src/db";
+import { dedupeMemories, getMemory, initDatabase, listMemories, saveMemory } from "../src/db";
 import { createMemory } from "../src/schema";
 import type { NewMemoryInput } from "../src/types";
 
@@ -65,6 +65,28 @@ test("--force-new creates a separate memory", () => {
   const inspect = runCli(["inspect"], cwd);
 
   assert.equal((inspect.stdout.match(/^Title:/gm) ?? []).length, 2);
+});
+
+test("dedupe preserves the oldest memory id as canonical", async () => {
+  const dbPath = tempDb();
+  await initDatabase(dbPath);
+  const first = createMemory(memory("Original canonical"));
+  first.created_at = "2024-01-01T00:00:00.000Z";
+  first.updated_at = "2024-01-01T00:00:00.000Z";
+  const second = createMemory(memory("Newer forced duplicate"));
+  second.created_at = "2024-02-01T00:00:00.000Z";
+  second.updated_at = "2024-02-01T00:00:00.000Z";
+
+  await saveMemory(first, { dbPath, forceNew: true });
+  await saveMemory(second, { dbPath, forceNew: true });
+  const candidates = await dedupeMemories({ dbPath });
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].canonical.id, first.id);
+  assert.equal(candidates[0].duplicate.id, second.id);
+  assert.equal((await listMemories(dbPath)).length, 1);
+  assert.ok(await getMemory(first.id, dbPath));
+  assert.equal(await getMemory(second.id, dbPath), undefined);
 });
 
 function tempDb(): string {

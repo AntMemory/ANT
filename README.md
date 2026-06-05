@@ -340,6 +340,8 @@ ant worked <memory_id>
 ant failed <memory_id>
 ```
 
+`ant sync` reports `synced`, `skipped`, and `failed` counts. Safety skips are nonfatal; upload/API failures make the command exit nonzero.
+
 Use `ANT_CLOUD_URL` for a non-local API:
 
 ```bash
