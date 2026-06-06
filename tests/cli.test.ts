@@ -108,6 +108,49 @@ test("remember saves memory from error log", () => {
   assert.match(result.stdout, /Remembered: Imported error log: error\.log/);
 });
 
+test("edit updates a memory from JSON while preserving its id", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-edit-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  const editedPath = path.join(cwd, "edited.json");
+  fs.writeFileSync(memoryPath, JSON.stringify(validMemory("Editable original memory"), null, 2));
+  fs.writeFileSync(editedPath, JSON.stringify(validMemory("Edited memory title"), null, 2));
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  const remember = runCli(["remember", "--json", memoryPath], cwd);
+  assert.equal(remember.status, 0, remember.stderr);
+  const id = extractMemoryId(remember.stdout);
+
+  const edit = runCli(["edit", id, "--json", editedPath], cwd);
+  assert.equal(edit.status, 0, edit.stderr);
+  assert.match(edit.stdout, new RegExp(`Updated: Edited memory title \\(${id}\\)`));
+
+  const inspect = runCli(["inspect"], cwd);
+  assert.equal(inspect.status, 0, inspect.stderr);
+  assert.match(inspect.stdout, /Title: Edited memory title/);
+  assert.match(inspect.stdout, new RegExp(`ID: ${id}`));
+  assert.doesNotMatch(inspect.stdout, /Editable original memory/);
+});
+
+test("edit rejects invalid memory JSON", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-edit-invalid-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  const invalidPath = path.join(cwd, "invalid.json");
+  fs.writeFileSync(memoryPath, JSON.stringify(validMemory("Edit invalid original"), null, 2));
+  fs.writeFileSync(invalidPath, JSON.stringify({ title: "Broken edit", problem: "No cause or solution." }, null, 2));
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  const remember = runCli(["remember", "--json", memoryPath], cwd);
+  assert.equal(remember.status, 0, remember.stderr);
+  const id = extractMemoryId(remember.stdout);
+
+  const edit = runCli(["edit", id, "--json", invalidPath], cwd);
+  assert.notEqual(edit.status, 0);
+  assert.match(edit.stderr, /cause is required/);
+
+  const inspect = runCli(["inspect"], cwd);
+  assert.match(inspect.stdout, /Title: Edit invalid original/);
+});
+
 test("search finds memory and prints detailed output", () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-search-"));
   const memoryPath = path.join(cwd, "memory.json");
@@ -208,6 +251,12 @@ function runCli(args: string[], cwd: string, input?: string, env: NodeJS.Process
     encoding: "utf8",
     env: { ...process.env, ...env }
   }) as CliResult;
+}
+
+function extractMemoryId(output: string): string {
+  const match = output.match(/\(([0-9a-f-]{36})\)/);
+  assert.ok(match, `Could not extract memory id from:\n${output}`);
+  return match[1];
 }
 
 function validMemory(title: string): object {

@@ -166,6 +166,7 @@ function redactLocalPaths(text: string, warnings: Set<string>): string {
 }
 
 function pathTail(value: string): string {
+  const separator = value.includes("\\") ? "\\" : "/";
   const normalized = value.replace(/\\/g, "/");
   const parts = normalized.split("/").filter(Boolean);
   const anchor = parts.findIndex((part) => {
@@ -173,11 +174,11 @@ function pathTail(value: string): string {
   });
 
   if (anchor !== -1) {
-    return `/${parts.slice(anchor).join("/")}`;
+    return `${separator}${parts.slice(anchor).join(separator)}`;
   }
 
   const tail = parts.at(-1);
-  return tail ? `/${tail}` : "";
+  return tail ? `${separator}${tail}` : "";
 }
 
 function redactHighEntropyTokens(text: string, warnings: Set<string>): string {

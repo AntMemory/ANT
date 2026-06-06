@@ -132,6 +132,12 @@ Save from JSON:
 ant remember --json examples/memories/nextjs-15-params.json
 ```
 
+Replace a saved memory from corrected JSON:
+
+```bash
+ant edit <memory_id> --json examples/memories/nextjs-15-params.json
+```
+
 Import an error log as a structured local memory:
 
 ```bash

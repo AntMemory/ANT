@@ -56,6 +56,34 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
 
+    if (command === "edit") {
+      const id = args[0];
+      if (!id) {
+        throw new Error("Usage: ant edit <memory_id> --json memory.json");
+      }
+
+      const existing = await getMemory(id);
+      if (!existing) {
+        throw new Error(`Memory not found: ${id}`);
+      }
+
+      const jsonPath = getFlagValue(args.slice(1), "--json");
+      if (!jsonPath) {
+        throw new Error("Usage: ant edit <memory_id> --json memory.json");
+      }
+
+      const edited = createMemory(memoryFromJson(JSON.parse(stripBom(fs.readFileSync(jsonPath, "utf8")))));
+      const updated = {
+        ...edited,
+        id: existing.id,
+        created_at: existing.created_at,
+        updated_at: new Date().toISOString()
+      };
+      await updateMemory(updated);
+      console.log(`Updated: ${updated.title} (${updated.id})`);
+      return;
+    }
+
     if (command === "ingest") {
       const filePath = args.find((arg) => !arg.startsWith("--"));
       if (!filePath) {
@@ -947,6 +975,7 @@ Usage:
   ant remember
   ant remember --json memory.json
   ant remember --from-file error.log
+  ant edit <memory_id> --json memory.json
   ant ingest <log-file>
   ant ingest <log-file> --interactive
   ant drafts

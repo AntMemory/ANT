@@ -174,7 +174,7 @@ const docs: Record<string, DocPage> = {
       {
         heading: "Local memory loop",
         code:
-          "ant init\nant doctor\nant remember --json examples/memories/nextjs-15-params.json\nant search \"nextjs params promise\"\nant inspect"
+          "ant init\nant doctor\nant remember --json examples/memories/nextjs-15-params.json\nant edit <memory_id> --json examples/memories/nextjs-15-params.json\nant search \"nextjs params promise\"\nant inspect"
       },
       {
         heading: "Ingest logs",

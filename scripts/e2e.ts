@@ -70,7 +70,7 @@ async function main(): Promise<void> {
   assert.doesNotMatch(redacted.stdout, new RegExp(escapeRegExp(fakeDbUrl)), "redact leaked DATABASE_URL");
   assert.doesNotMatch(redacted.stdout, new RegExp(escapeRegExp(fakeEmail)), "redact leaked email");
   assert.doesNotMatch(redacted.stdout, /ExampleProject|devuser/, "redact leaked local path details");
-  assert.match(redacted.stdout, /\[REDACTED_PATH\]\/src\/index\.ts/, "redact did not preserve useful path tail");
+  assert.match(redacted.stdout, /\[REDACTED_PATH\]\\src\\index\.ts/, "redact did not preserve useful path tail");
 
   step("MCP smoke test");
   runNpmScript("test:mcp");

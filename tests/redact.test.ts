@@ -47,7 +47,7 @@ test("redactText minimizes Windows local project paths", () => {
     "C:\\Users\\devuser\\Documents\\ExampleProject"
   );
 
-  assert.match(result.text, /\[REDACTED_PATH\]\/src\/index\.ts:10/);
+  assert.match(result.text, /\[REDACTED_PATH\]\\src\\index\.ts:10/);
   assert.doesNotMatch(result.text, /devuser/);
   assert.doesNotMatch(result.text, /ExampleProject/);
 });
