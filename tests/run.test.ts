@@ -98,7 +98,8 @@ test("ant run auto-searches global memories when enabled", async () => {
     const result = await runCliAsync(["run", "--", process.execPath, scriptPath], cwd, { ANT_CLOUD_URL: cloud.baseUrl });
 
     assert.equal(result.status, 1);
-    assert.match(result.stdout, /Global memories:/);
+    assert.match(result.stdout, /Global memories \(ANT cloud\):/);
+    assert.match(result.stdout, /Source: global/);
     assert.match(result.stdout, /Global Next\.js params fix/);
   } finally {
     await cloud.close();

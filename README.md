@@ -120,6 +120,8 @@ Check local setup:
 ant doctor
 ```
 
+`ant doctor` prints the local database path, automation config, cloud API URL, and whether a cloud token is configured.
+
 Save a memory interactively:
 
 ```bash
@@ -390,6 +392,8 @@ Explicit publish review:
 ant publish <memory_id> --dry-run
 ant publish <memory_id>
 ```
+
+`ant publish --dry-run` prints a safety report covering privacy, redaction, completeness, evidence, warnings, errors, and whether the memory would publish.
 
 Local automation settings:
 

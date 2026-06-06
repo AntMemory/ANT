@@ -24,7 +24,7 @@ import {
 } from "./db";
 import { cloudUrl, markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory } from "./cloudClient";
 import { startCloudServer } from "./cloudServer";
-import { assertCanSync } from "./cloudSafety";
+import { assertCanSync, reviewMemoryForPublish } from "./cloudSafety";
 import { configKeys, loadConfig, setConfigValue } from "./config";
 import type { RankedCloudMemory } from "./cloudStore";
 import type { RankedMemory } from "./scoring";
@@ -330,14 +330,57 @@ async function publishMemory(args: string[]): Promise<void> {
     throw new Error(`Memory not found: ${id}`);
   }
 
-  assertCanSync(memory);
   if (args.includes("--dry-run")) {
-    console.log(`Publish review passed: ${memory.title} (${memory.id})`);
+    printPublishReview(memory);
+    if (!reviewMemoryForPublish(memory).ok) {
+      process.exitCode = 1;
+    }
     return;
   }
 
+  printPublishReview(memory);
+  assertCanSync(memory);
   const result = await uploadMemory(memory);
   console.log(`Published: ${memory.title} (${result.id})`);
+}
+
+function printPublishReview(memory: Memory): void {
+  const review = reviewMemoryForPublish(memory);
+  const redactionFailed =
+    hasHighSeverityWarning(memory) || review.errors.some((error) => error.includes("unredacted private data"));
+  console.log(`Publish review: ${review.ok ? "passed" : "failed"}`);
+  console.log(`Memory: ${memory.title} (${memory.id})`);
+  console.log(`Privacy: ${memory.privacy.public_safe ? "passed" : "failed"} (${memory.privacy.public_safe ? "public-safe" : "not public-safe"})`);
+  console.log(`Redaction: ${redactionFailed ? "failed" : "passed"}`);
+  console.log(`Completeness: ${review.errors.some((error) => error.includes("incomplete") || error.includes("placeholder") || error.includes("missing")) ? "failed" : "passed"}`);
+  console.log(`Evidence: ${review.errors.some((error) => error.includes("evidence") || error.includes("commands_run")) ? "failed" : "passed"}`);
+  if (review.errors.length > 0) {
+    console.log("Errors:");
+    for (const error of review.errors) {
+      console.log(`  - ${error}`);
+    }
+  }
+  if (review.warnings.length > 0) {
+    console.log("Warnings:");
+    for (const warning of review.warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+  console.log(`Would publish: ${review.ok ? "yes" : "no"}`);
+}
+
+function hasHighSeverityWarning(memory: Memory): boolean {
+  return memory.privacy.redaction_warnings.some((warning) => {
+    return [
+      "API key redacted",
+      "token redacted",
+      "password redacted",
+      "private key redacted",
+      ".env value redacted",
+      "database URL redacted",
+      "high entropy secret redacted"
+    ].includes(warning);
+  });
 }
 
 async function maybeAutoPublish(memory: Memory): Promise<void> {
@@ -412,7 +455,12 @@ async function runDoctor(): Promise<void> {
   for (const check of checks) {
     console.log(`${check.ok ? "PASS" : "FAIL"} ${check.label}: ${check.detail}`);
   }
+  const config = loadConfig();
+  console.log(`INFO Database path: ${dbPath}`);
+  console.log(`INFO Config auto_search_global: ${config.auto_search_global ? "on" : "off"}`);
+  console.log(`INFO Config auto_publish: ${config.auto_publish ? "on" : "off"}`);
   console.log(`INFO Cloud API URL: ${cloudUrl()}`);
+  console.log(`INFO Cloud token configured: ${process.env.ANT_CLOUD_TOKEN ? "yes" : "no"}`);
 
   if (checks.some((check) => !check.ok)) {
     throw new Error("ANT doctor failed.");
@@ -605,7 +653,8 @@ async function runCommand(args: string[]): Promise<void> {
       try {
         const globalMatches = (await searchGlobalMemories(query)).memories.slice(0, 3);
         if (globalMatches.length > 0) {
-          console.log("Global memories:");
+          console.log("Global memories (ANT cloud):");
+          console.log("Source: global");
           printGlobalMemories(globalMatches, "");
         }
       } catch (error) {

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -71,7 +70,11 @@ test("doctor passes on a clean repo", () => {
   assert.match(result.stdout, /PASS Local SQLite database/);
   assert.match(result.stdout, /PASS Redaction smoke test/);
   assert.match(result.stdout, /PASS MCP tool surface/);
+  assert.match(result.stdout, /INFO Database path:/);
+  assert.match(result.stdout, /INFO Config auto_search_global: off/);
+  assert.match(result.stdout, /INFO Config auto_publish: off/);
   assert.match(result.stdout, /INFO Cloud API URL:/);
+  assert.match(result.stdout, /INFO Cloud token configured: no/);
   assert.match(result.stdout, /ANT doctor passed/);
 });
 
@@ -121,6 +124,54 @@ test("auto_publish uploads safe saved memories when enabled", async () => {
   } finally {
     await cloud.close();
   }
+});
+
+test("publish dry-run prints a detailed safety report", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-publish-dry-run-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  fs.writeFileSync(memoryPath, JSON.stringify(validMemory("Dry run publish memory"), null, 2));
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  const remember = runCli(["remember", "--json", memoryPath], cwd);
+  assert.equal(remember.status, 0, remember.stderr);
+  const id = extractMemoryId(remember.stdout);
+
+  const dryRun = runCli(["publish", id, "--dry-run"], cwd);
+
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  assert.match(dryRun.stdout, /Publish review: passed/);
+  assert.match(dryRun.stdout, /Privacy: passed/);
+  assert.match(dryRun.stdout, /Redaction: passed/);
+  assert.match(dryRun.stdout, /Completeness: passed/);
+  assert.match(dryRun.stdout, /Evidence: passed/);
+  assert.match(dryRun.stdout, /Would publish: yes/);
+});
+
+test("publish dry-run reports failed review details", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-publish-dry-run-fail-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  fs.writeFileSync(
+    memoryPath,
+    JSON.stringify({
+      ...validMemory("Unsafe dry run memory"),
+      cause: "TODO",
+      privacy: { redacted: true, public_safe: false, redaction_warnings: [] }
+    }, null, 2)
+  );
+
+  assert.equal(runCli(["init"], cwd).status, 0);
+  const remember = runCli(["remember", "--json", memoryPath], cwd);
+  assert.equal(remember.status, 0, remember.stderr);
+  const id = extractMemoryId(remember.stdout);
+
+  const dryRun = runCli(["publish", id, "--dry-run"], cwd);
+
+  assert.notEqual(dryRun.status, 0);
+  assert.match(dryRun.stdout, /Publish review: failed/);
+  assert.match(dryRun.stdout, /Privacy: failed/);
+  assert.match(dryRun.stdout, /Completeness: failed/);
+  assert.match(dryRun.stdout, /Errors:/);
+  assert.match(dryRun.stdout, /Would publish: no/);
 });
 
 test("remember accepts UTF-8 BOM memory JSON", () => {
