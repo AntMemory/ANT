@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { createCloudServer } from "../src/cloudServer";
+import { createCloudStore, type CloudStore } from "../src/cloudStore";
 
 const cliPath = path.join(process.cwd(), "src", "cli.ts");
 const tsxPath = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.cjs");
@@ -82,6 +85,42 @@ test("remember saves memory from JSON", () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Remembered: JSON import test error/);
+});
+
+test("config set stores local automation settings", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-config-"));
+
+  const set = runCli(["config", "set", "auto_search_global", "true"], cwd);
+  const get = runCli(["config"], cwd);
+
+  assert.equal(set.status, 0, set.stderr);
+  assert.match(set.stdout, /auto_search_global=true/);
+  assert.equal(get.status, 0, get.stderr);
+  assert.equal(JSON.parse(get.stdout).auto_search_global, true);
+  assert.equal(JSON.parse(get.stdout).auto_publish, false);
+});
+
+test("auto_publish uploads safe saved memories when enabled", async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-auto-publish-"));
+  const memoryPath = path.join(cwd, "memory.json");
+  fs.writeFileSync(memoryPath, JSON.stringify(validMemory("Auto publish memory"), null, 2));
+  const cloud = await startCloudApi();
+
+  try {
+    assert.equal(runCli(["init"], cwd).status, 0);
+    assert.equal(runCli(["config", "set", "auto_publish", "true"], cwd).status, 0);
+    const remember = await runCliAsync(["remember", "--json", memoryPath], cwd, { ANT_CLOUD_URL: cloud.baseUrl });
+
+    assert.equal(remember.status, 0, remember.stderr);
+    assert.match(remember.stdout, /Remembered: Auto publish memory/);
+    assert.match(remember.stdout, /Auto-published: Auto publish memory/);
+
+    const search = await fetch(`${cloud.baseUrl}/search?q=auto%20publish`);
+    const body = await search.json() as { memories: Array<{ title: string }> };
+    assert.equal(body.memories[0].title, "Auto publish memory");
+  } finally {
+    await cloud.close();
+  }
 });
 
 test("remember accepts UTF-8 BOM memory JSON", () => {
@@ -244,6 +283,26 @@ test("mcp doctor passes on a clean repo", () => {
 
 type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
 
+async function startCloudApi(): Promise<{ baseUrl: string; close(): Promise<void> }> {
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ant-cli-cloud-")), "cloud.sqlite");
+  const store: CloudStore = createCloudStore({ dbPath, databaseUrl: "" });
+  await store.init();
+  const server = createCloudServer(store);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    async close() {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+      await store.close();
+    }
+  };
+}
+
 function runCli(args: string[], cwd: string, input?: string, env: NodeJS.ProcessEnv = {}): CliResult {
   return spawnSync(process.execPath, [tsxPath, cliPath, ...args], {
     cwd,
@@ -251,6 +310,27 @@ function runCli(args: string[], cwd: string, input?: string, env: NodeJS.Process
     encoding: "utf8",
     env: { ...process.env, ...env }
   }) as CliResult;
+}
+
+async function runCliAsync(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
+  const child = spawn(process.execPath, [tsxPath, cliPath, ...args], {
+    cwd,
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+  const status = await new Promise<number | null>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+  return { status, stdout, stderr } as CliResult;
 }
 
 function extractMemoryId(output: string): string {

@@ -161,7 +161,12 @@ function statusForError(error: unknown): number {
     return error.status;
   }
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("not public-safe") || message.includes("high-severity") || message.includes("draft or incomplete")) {
+  if (
+    message.includes("failed publish review") ||
+    message.includes("not public-safe") ||
+    message.includes("high-severity") ||
+    message.includes("draft or incomplete")
+  ) {
     return 400;
   }
   if (message.includes("not found") || message.includes("Not found")) {

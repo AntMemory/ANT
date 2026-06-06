@@ -122,6 +122,39 @@ test("draft memory is rejected", async () => {
   assert.match(response.body.error, /not public-safe|draft|incomplete/);
 });
 
+test("placeholder cause or solution is rejected by publish review", async () => {
+  const memory = createMemory({
+    ...safeMemory("Placeholder memory"),
+    cause: "TODO",
+    solution: {
+      ...safeMemory("Placeholder memory").solution,
+      summary: "TBD"
+    }
+  });
+
+  const response = await postJson("/memories", memory);
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /publish review/);
+  assert.match(response.body.error, /cause looks incomplete|solution summary looks incomplete/);
+});
+
+test("automated verification requires commands_run before publish", async () => {
+  const memory = createMemory({
+    ...safeMemory("Evidence without command"),
+    evidence: {
+      verification_type: "build passed",
+      commands_run: []
+    }
+  });
+
+  const response = await postJson("/memories", memory);
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /publish review/);
+  assert.match(response.body.error, /commands_run/);
+});
+
 test("auth missing fails when token is set", async () => {
   await restartServerWithToken("secret-token");
 

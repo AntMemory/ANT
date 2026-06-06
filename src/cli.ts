@@ -25,6 +25,7 @@ import {
 import { cloudUrl, markGlobalFailed, markGlobalWorked, searchGlobalMemories, uploadMemory } from "./cloudClient";
 import { startCloudServer } from "./cloudServer";
 import { assertCanSync } from "./cloudSafety";
+import { configKeys, loadConfig, setConfigValue } from "./config";
 import type { RankedCloudMemory } from "./cloudStore";
 import type { RankedMemory } from "./scoring";
 import type { Memory, NewMemoryInput } from "./types";
@@ -45,6 +46,11 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
 
+    if (command === "config") {
+      runConfigCommand(args);
+      return;
+    }
+
     if (command === "remember") {
       const memory = createMemory(await readMemoryInput(args));
       const result = await saveMemory(memory, { forceNew: args.includes("--force-new") });
@@ -53,6 +59,7 @@ async function main(argv: string[]): Promise<void> {
       } else {
         console.log(`Remembered: ${result.memory.title} (${result.memory.id})`);
       }
+      await maybeAutoPublish(result.memory);
       return;
     }
 
@@ -81,6 +88,7 @@ async function main(argv: string[]): Promise<void> {
       };
       await updateMemory(updated);
       console.log(`Updated: ${updated.title} (${updated.id})`);
+      await maybeAutoPublish(updated);
       return;
     }
 
@@ -100,6 +108,7 @@ async function main(argv: string[]): Promise<void> {
       if (!result.memory.privacy.public_safe) {
         console.log("Status: pending completion or privacy review");
       }
+      await maybeAutoPublish(result.memory);
       return;
     }
 
@@ -125,15 +134,15 @@ async function main(argv: string[]): Promise<void> {
 
       const completedInput = await completeIngestDraft(draft);
       const completed = createMemory(completedInput);
-      await updateMemory(
-        {
-          ...completed,
-          id: draft.id,
-          created_at: draft.created_at,
-          updated_at: new Date().toISOString()
-        }
-      );
+      const updated = {
+        ...completed,
+        id: draft.id,
+        created_at: draft.created_at,
+        updated_at: new Date().toISOString()
+      };
+      await updateMemory(updated);
       console.log(`Completed draft: ${draft.title} (${draft.id})`);
+      await maybeAutoPublish(updated);
       return;
     }
 
@@ -188,6 +197,11 @@ async function main(argv: string[]): Promise<void> {
 
     if (command === "sync") {
       await syncMemories();
+      return;
+    }
+
+    if (command === "publish") {
+      await publishMemory(args);
       return;
     }
 
@@ -281,6 +295,61 @@ async function syncMemories(): Promise<void> {
   console.log(`Sync complete. synced=${synced} skipped=${skipped} failed=${failed}`);
   if (failed > 0) {
     process.exitCode = 1;
+  }
+}
+
+function runConfigCommand(args: string[]): void {
+  if (args.length === 0 || args[0] === "get") {
+    console.log(JSON.stringify(loadConfig(), null, 2));
+    return;
+  }
+
+  if (args[0] === "set") {
+    const key = args[1];
+    const value = args[2];
+    if (!key || !value) {
+      throw new Error(`Usage: ant config set <${configKeys.join("|")}> <true|false>`);
+    }
+
+    const config = setConfigValue(key, value);
+    console.log(`Config updated: ${key}=${config[key as keyof typeof config]}`);
+    return;
+  }
+
+  throw new Error("Usage: ant config [get|set <key> <true|false>]");
+}
+
+async function publishMemory(args: string[]): Promise<void> {
+  const id = args.find((arg) => !arg.startsWith("--"));
+  if (!id) {
+    throw new Error("Usage: ant publish <memory_id> [--dry-run]");
+  }
+
+  const memory = await getMemory(id);
+  if (!memory) {
+    throw new Error(`Memory not found: ${id}`);
+  }
+
+  assertCanSync(memory);
+  if (args.includes("--dry-run")) {
+    console.log(`Publish review passed: ${memory.title} (${memory.id})`);
+    return;
+  }
+
+  const result = await uploadMemory(memory);
+  console.log(`Published: ${memory.title} (${result.id})`);
+}
+
+async function maybeAutoPublish(memory: Memory): Promise<void> {
+  if (!loadConfig().auto_publish) {
+    return;
+  }
+
+  try {
+    const result = await uploadMemory(memory);
+    console.log(`Auto-published: ${memory.title} (${result.id})`);
+  } catch (error) {
+    console.error(`Auto-publish skipped ${memory.id}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -532,28 +601,40 @@ async function runCommand(args: string[]): Promise<void> {
       console.log("Similar memories:");
       printMemories(matches, "");
     }
+    if (parsed.globalSearch || loadConfig().auto_search_global) {
+      try {
+        const globalMatches = (await searchGlobalMemories(query)).memories.slice(0, 3);
+        if (globalMatches.length > 0) {
+          console.log("Global memories:");
+          printGlobalMemories(globalMatches, "");
+        }
+      } catch (error) {
+        console.error(`Global auto-search skipped: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   process.exitCode = result.exitCode;
 }
 
-function parseRunArgs(args: string[]): { commandArgs: string[]; saveLog: boolean; noSearch: boolean } {
+function parseRunArgs(args: string[]): { commandArgs: string[]; saveLog: boolean; noSearch: boolean; globalSearch: boolean } {
   const separator = args.indexOf("--");
   if (separator === -1) {
-    throw new Error("Usage: ant run [--save-log] [--no-search] -- <command>");
+    throw new Error("Usage: ant run [--save-log] [--no-search] [--global-search] -- <command>");
   }
 
   const flags = args.slice(0, separator);
   const commandArgs = args.slice(separator + 1);
-  const unknown = flags.filter((flag) => !["--save-log", "--no-search"].includes(flag));
+  const unknown = flags.filter((flag) => !["--save-log", "--no-search", "--global-search"].includes(flag));
   if (unknown.length > 0 || commandArgs.length === 0) {
-    throw new Error("Usage: ant run [--save-log] [--no-search] -- <command>");
+    throw new Error("Usage: ant run [--save-log] [--no-search] [--global-search] -- <command>");
   }
 
   return {
     commandArgs,
     saveLog: flags.includes("--save-log"),
-    noSearch: flags.includes("--no-search")
+    noSearch: flags.includes("--no-search"),
+    globalSearch: flags.includes("--global-search")
   };
 }
 
@@ -972,6 +1053,9 @@ function printHelp(): void {
 Usage:
   ant init
   ant doctor
+  ant config
+  ant config set auto_search_global true
+  ant config set auto_publish true
   ant remember
   ant remember --json memory.json
   ant remember --from-file error.log
@@ -980,13 +1064,15 @@ Usage:
   ant ingest <log-file> --interactive
   ant drafts
   ant complete <draft_id>
-  ant run [--save-log] [--no-search] -- <command>
+  ant run [--save-log] [--no-search] [--global-search] -- <command>
   ant redact <file>
   ant search <query>
   ant search --global <query>
   ant inspect
   ant inspect-pending
   ant sync
+  ant publish <memory_id>
+  ant publish <memory_id> --dry-run
   ant dedupe
   ant dedupe --dry-run
   ant worked <memory_id>

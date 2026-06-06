@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { createCloudServer } from "../src/cloudServer";
+import { createCloudStore, type CloudStore } from "../src/cloudStore";
+import { createMemory } from "../src/schema";
+import type { NewMemoryInput } from "../src/types";
 
 const cliPath = path.join(process.cwd(), "src", "cli.ts");
 const tsxPath = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.cjs");
@@ -75,6 +79,32 @@ test("ant run suggests similar existing memories", () => {
   assert.match(result.stdout, /Existing Next\.js params fix/);
 });
 
+test("ant run auto-searches global memories when enabled", async () => {
+  const cwd = tempCwd("ant-run-global-search-");
+  const cloud = await startCloudApi();
+  const scriptPath = writeScript(
+    cwd,
+    "fail-global.js",
+    [
+      "console.error('Type error: Type { params: { slug: string } } does not satisfy the constraint PageProps');",
+      "process.exit(1);"
+    ]
+  );
+
+  try {
+    await cloud.store.save(createMemory(validMemory("Global Next.js params fix")));
+    assert.equal(runCli(["init"], cwd).status, 0);
+    assert.equal(runCli(["config", "set", "auto_search_global", "true"], cwd).status, 0);
+    const result = await runCliAsync(["run", "--", process.execPath, scriptPath], cwd, { ANT_CLOUD_URL: cloud.baseUrl });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /Global memories:/);
+    assert.match(result.stdout, /Global Next\.js params fix/);
+  } finally {
+    await cloud.close();
+  }
+});
+
 test("ant run redacts secrets in saved command logs and drafts", () => {
   const cwd = tempCwd("ant-run-redact-");
   const secret = "sk-test1234567890abcdefABCDEF123456";
@@ -106,11 +136,54 @@ test("ant run redacts secrets in saved command logs and drafts", () => {
 
 type CliResult = ReturnType<typeof spawnSync> & { stdout: string; stderr: string };
 
-function runCli(args: string[], cwd: string): CliResult {
+function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): CliResult {
   return spawnSync(process.execPath, [tsxPath, cliPath, ...args], {
     cwd,
-    encoding: "utf8"
+    encoding: "utf8",
+    env: { ...process.env, ...env }
   }) as CliResult;
+}
+
+async function runCliAsync(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
+  const child = spawn(process.execPath, [tsxPath, cliPath, ...args], {
+    cwd,
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+  const status = await new Promise<number | null>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+  return { status, stdout, stderr } as CliResult;
+}
+
+async function startCloudApi(): Promise<{ baseUrl: string; store: CloudStore; close(): Promise<void> }> {
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ant-run-cloud-")), "cloud.sqlite");
+  const store: CloudStore = createCloudStore({ dbPath, databaseUrl: "" });
+  await store.init();
+  const server = createCloudServer(store);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    store,
+    async close() {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+      await store.close();
+    }
+  };
 }
 
 function tempCwd(prefix: string): string {
@@ -129,7 +202,7 @@ function extractLogPath(output: string): string {
   return match[1].trim();
 }
 
-function validMemory(title: string): object {
+function validMemory(title: string): NewMemoryInput {
   return {
     title,
     problem: "Next.js dynamic route params are a Promise.",

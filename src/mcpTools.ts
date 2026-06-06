@@ -1,5 +1,7 @@
 import { createMemory, validateNewMemory } from "./schema";
 import { memoryFromJson } from "./input";
+import { uploadMemory } from "./cloudClient";
+import { loadConfig } from "./config";
 import {
   getMemory,
   listMemories,
@@ -34,12 +36,28 @@ export async function searchMemoryTool(args: SearchMemoryInput, dbPath?: string)
   return { memories };
 }
 
-export async function saveMemoryTool(args: { memory: unknown }, dbPath?: string): Promise<{ id: string }> {
+export async function saveMemoryTool(
+  args: { memory: unknown },
+  dbPath?: string
+): Promise<{ id: string; auto_published?: boolean; auto_publish_error?: string }> {
   const input = memoryFromJson(args.memory);
   validateNewMemory(input);
   const memory = createMemory(input);
   const result = await saveMemory(memory, { dbPath });
-  return { id: result.memory.id };
+  if (!loadConfig().auto_publish) {
+    return { id: result.memory.id };
+  }
+
+  try {
+    await uploadMemory(result.memory);
+    return { id: result.memory.id, auto_published: true };
+  } catch (error) {
+    return {
+      id: result.memory.id,
+      auto_published: false,
+      auto_publish_error: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 export async function inspectMemoriesTool(args: { limit?: number } = {}, dbPath?: string): Promise<{ memories: Memory[] }> {

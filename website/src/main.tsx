@@ -184,7 +184,7 @@ const docs: Record<string, DocPage> = {
       {
         heading: "Command runner",
         body: "Wrap a debugging command. Passing commands do not create drafts; failing commands create redacted draft memories and suggest similar local memories.",
-        code: "ant run -- npm run build\nant run --save-log -- npm test\nant run --no-search -- npm run typecheck"
+        code: "ant run -- npm run build\nant run --global-search -- npm run build\nant config set auto_search_global true"
       }
     ]
   },
@@ -269,7 +269,7 @@ const docs: Record<string, DocPage> = {
       {
         heading: "Sync gate",
         body:
-          "Cloud sync refuses incomplete drafts, memories where privacy.public_safe is not true, and memories with high-severity redaction warnings."
+          "Cloud sync runs a deterministic publish review. It refuses incomplete drafts, memories where privacy.public_safe is not true, high-severity redaction warnings, placeholder fix content, and automated verification claims without commands_run."
       },
       {
         heading: "Limitations",
@@ -294,7 +294,13 @@ const docs: Record<string, DocPage> = {
         heading: "Sync And Search",
         body:
           "Sync reports synced, skipped, and failed counts. Safety skips are nonfatal; upload or API failures make the command exit nonzero.",
-        code: "ant sync\nant search --global \"prisma generate cache\"\nant worked <memory_id>\nant failed <memory_id>"
+        code: "ant sync\nant publish <memory_id> --dry-run\nant publish <memory_id>\nant search --global \"prisma generate cache\"\nant worked <memory_id>\nant failed <memory_id>"
+      },
+      {
+        heading: "Opt-In Automation",
+        body:
+          "Global auto-search and auto-publish are disabled by default. Auto-publish still runs publish review and never blocks the local save if upload is skipped.",
+        code: "ant config set auto_search_global true\nant config set auto_publish true"
       },
       {
         heading: "Safety Rules",
@@ -302,6 +308,8 @@ const docs: Record<string, DocPage> = {
           "Only public-safe memories sync",
           "High-severity redaction warnings block sync",
           "Draft or incomplete memories do not sync",
+          "Publish review re-checks fields for private data and placeholder fix content",
+          "Automated verification claims require commands_run",
           "Raw files and raw chat logs are never synced",
           "Inspect memories before sharing",
           "Do not expose the alpha API publicly without a reverse proxy and rate limiting"

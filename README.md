@@ -161,9 +161,14 @@ Run a debugging command through ANT:
 ant run -- npm run build
 ant run --save-log -- npm test
 ant run --no-search -- npm run typecheck
+ant run --global-search -- npm run build
 ```
 
-When the wrapped command fails, ANT creates a redacted draft memory and suggests similar local memories. Passing commands do not create drafts.
+When the wrapped command fails, ANT creates a redacted draft memory and suggests similar local memories. Passing commands do not create drafts. Use `--global-search` for one run, or enable it by default:
+
+```bash
+ant config set auto_search_global true
+```
 
 Search local memories:
 
@@ -194,10 +199,20 @@ Cloud alpha commands:
 ```bash
 ant cloud
 ant sync
+ant publish <memory_id> --dry-run
+ant publish <memory_id>
 ant search --global "prisma generate cache"
 ant worked <memory_id>
 ant failed <memory_id>
 ```
+
+Opt-in auto-publish can publish safe completed memories after they pass publish review:
+
+```bash
+ant config set auto_publish true
+```
+
+Auto-publish is disabled by default. Failed auto-publish attempts do not block local saves; ANT prints why they were skipped.
 
 ## MCP Usage
 
@@ -321,7 +336,7 @@ privacy: {
 
 `ant inspect-pending` shows memories where `public_safe` is false.
 
-Cloud sync refuses memories that are not public-safe and also blocks memories carrying high-severity redaction warnings such as API keys, tokens, passwords, private keys, `.env` values, database URLs, or high-entropy secrets.
+Cloud sync runs a deterministic publish review before upload. It refuses memories that are not public-safe, blocks high-severity redaction warnings such as API keys, tokens, passwords, private keys, `.env` values, database URLs, or high-entropy secrets, and rejects memories that still look incomplete or placeholder-filled.
 
 ## Cloud Sync Alpha
 
@@ -369,6 +384,23 @@ ant failed <memory_id>
 
 `ant sync` reports `synced`, `skipped`, and `failed` counts. Safety skips are nonfatal; upload/API failures make the command exit nonzero.
 
+Explicit publish review:
+
+```bash
+ant publish <memory_id> --dry-run
+ant publish <memory_id>
+```
+
+Local automation settings:
+
+```bash
+ant config
+ant config set auto_search_global true
+ant config set auto_publish true
+```
+
+`auto_search_global` makes failed `ant run` commands search the global alpha API after local search. `auto_publish` tries to publish safe completed memories after `ant remember`, `ant complete`, interactive `ant ingest`, `ant edit`, or MCP `save_memory`. It remains opt-in and still uses the same publish review as manual sync.
+
 Use `ANT_CLOUD_URL` for a non-local API:
 
 ```bash
@@ -380,6 +412,9 @@ Safety rules:
 - Only `privacy.public_safe = true` memories sync.
 - High-severity redaction warnings block sync.
 - Draft/incomplete memories block sync.
+- Publish review re-runs deterministic redaction checks on memory fields before upload.
+- Placeholder or likely-wrong fix content such as `TODO`, `TBD`, `unknown`, or missing solution/evidence blocks sync.
+- Automated verification claims such as build/test passed require `evidence.commands_run`.
 - Raw files and raw chat logs are never synced.
 - JSON request bodies are size-limited and malformed JSON is rejected.
 - The server owns timestamps and worked/failed counters.
